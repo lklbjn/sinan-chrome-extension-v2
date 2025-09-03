@@ -1,4 +1,4 @@
-name: push-image-aliyun-registry
+name: build-sinan-chrome-extension
 
 on:
   push:
@@ -36,7 +36,7 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Build project
         run: pnpm run build
