@@ -1,0 +1,56 @@
+export interface TagResp {
+  id: string;
+  name: string;
+  color: string;
+  sort: number;
+  description: string;
+  createTime: string;
+  updateTime: string;
+}
+
+export interface BookmarkResp {
+  id: string;
+  namespaceId: string;
+  name: string;
+  description: string;
+  url: string;
+  icon: string;
+  num: number;
+  star: boolean;
+  tags: TagResp[];
+}
+
+export interface BookmarkTreeResp {
+  spaceId: string;
+  spaceName: string;
+  spaceDescription: string;
+  bookmarks: BookmarkResp[];
+}
+
+export interface AddBookmarkReq {
+  name: string;
+  url: string;
+  description?: string;
+  namespaceId?: string;
+  tagsIds?: string[];
+}
+
+export interface ApiResult<T> {
+  code: number;
+  message: string;
+  description: string;
+  data: T;
+  date: number;
+  flag: boolean;
+  messageId: string;
+}
+
+export interface MostVisitedParams {
+  limit: number;
+  search?: string;
+}
+
+export type ResultBookmarkResp = ApiResult<BookmarkResp>;
+export type ResultListBookmarkResp = ApiResult<BookmarkResp[]>;
+export type ResultListBookmarkTreeResp = ApiResult<BookmarkTreeResp[]>;
+export type ResultString = ApiResult<string>;

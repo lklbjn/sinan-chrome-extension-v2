@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Sinan书签管理器-BATE",
+  "version": "1.0.0",
+  "description": "高效的书签管理工具，支持智能搜索、使用统计和快速访问最常用的网站",
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "chrome_url_overrides": {
+    "newtab": "src/newtab/index.html"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "tabs", "bookmarks", "alarms"],
+  "omnibox": {
+    "keyword": "bm"
+  },
+  "host_permissions": ["<all_urls>"],
+  "icons": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+  }
+}
