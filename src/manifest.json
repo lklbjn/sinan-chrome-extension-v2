@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sinan书签管理器-BATE",
   "version": "1.0.0",
-  "description": "高效的书签管理工具，支持智能搜索、使用统计和快速访问最常用的网站",
+  "description": "一个强大的 Chrome 书签同步与管理扩展，让您在任何设备上都能快速访问您的书签收藏。通过智能推荐和优雅的界面设计，让书签管理变得简单高效。",
   "action": {
     "default_popup": "src/popup/index.html",
     "default_icon": {
