@@ -3,6 +3,7 @@ export interface SinanConfig {
   apiKey: string;
   autoSync: boolean;
   syncInterval: string;
+  iconSource: 'google-s2' | 'sinan';
   lastSyncTime?: number;
 }
 
@@ -11,6 +12,7 @@ const DEFAULT_CONFIG: SinanConfig = {
   apiKey: '',
   autoSync: false,
   syncInterval: '30',
+  iconSource: 'google-s2',
 };
 
 export class StorageService {

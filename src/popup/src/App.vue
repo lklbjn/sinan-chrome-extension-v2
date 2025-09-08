@@ -1,11 +1,5 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -16,10 +10,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toTypedSchema } from '@vee-validate/zod'
-import { useForm } from 'vee-validate'
+import Tabs from "@/components/ui/tabs/Tabs.vue";
+import TabsList from "@/components/ui/tabs/TabsList.vue";
+import TabsTrigger from "@/components/ui/tabs/TabsTrigger.vue";
+import TabsContent from "@/components/ui/tabs/TabsContent.vue";
 import { useColorMode } from '@vueuse/core'
-import * as z from 'zod'
 import { onMounted, ref, computed } from 'vue'
 import { StorageService } from '../../shared/services/storage'
 import { SinanApiService } from '../../shared/services/api'
@@ -33,13 +28,6 @@ const mode = useColorMode({
   },
   initialValue: 'auto'
 })
-
-const formSchema = toTypedSchema(z.object({
-  serverUrl: z.string().min(1, '请输入服务器地址'),
-  apiKey: z.string().min(1, '请输入接口密钥'),
-  autoSync: z.boolean(),
-  syncInterval: z.string().min(1, '请选择同步间隔'),
-}))
 
 const isLoading = ref(true)
 const lastSyncTime = ref<number | undefined>()
@@ -56,22 +44,23 @@ const syncAlert = ref<{ show: boolean; type: 'success' | 'error'; message: strin
   message: ''
 })
 
-const { handleSubmit, setFieldValue, values } = useForm({
-  validationSchema: formSchema,
-  initialValues: {
-    serverUrl: 'https://sinan.host',
-    apiKey: '',
-    autoSync: false,
-    syncInterval: '30',
-  }
+// 表单状态持久化
+const formValues = ref({
+  serverUrl: 'https://sinan.host',
+  apiKey: '',
+  autoSync: false,
+  syncInterval: '30',
+  iconSource: 'google-s2' as 'google-s2' | 'sinan',
 })
+
 
 const hasChanges = computed(() => {
   return (
-    values.serverUrl !== originalConfig.value.serverUrl ||
-    values.apiKey !== originalConfig.value.apiKey ||
-    values.autoSync !== originalConfig.value.autoSync ||
-    values.syncInterval !== originalConfig.value.syncInterval
+    formValues.value.serverUrl !== originalConfig.value.serverUrl ||
+    formValues.value.apiKey !== originalConfig.value.apiKey ||
+    formValues.value.autoSync !== originalConfig.value.autoSync ||
+    formValues.value.syncInterval !== originalConfig.value.syncInterval ||
+    formValues.value.iconSource !== originalConfig.value.iconSource
   )
 })
 
@@ -90,14 +79,21 @@ const lastSyncText = computed(() => {
   return '刚刚'
 })
 
+
 onMounted(async () => {
   try {
     const config = await StorageService.getConfig()
     originalConfig.value = { ...config }
-    setFieldValue('serverUrl', config.serverUrl)
-    setFieldValue('apiKey', config.apiKey)
-    setFieldValue('autoSync', config.autoSync)
-    setFieldValue('syncInterval', config.syncInterval)
+    
+    // 更新持久化表单值
+    formValues.value = {
+      serverUrl: config.serverUrl,
+      apiKey: config.apiKey,
+      autoSync: config.autoSync,
+      syncInterval: config.syncInterval,
+      iconSource: config.iconSource,
+    }
+    
     lastSyncTime.value = config.lastSyncTime
   } catch (error) {
     console.error('Failed to load config:', error)
@@ -106,7 +102,7 @@ onMounted(async () => {
   }
 })
 
-const onSubmit = handleSubmit(async (values) => {
+const onSubmit = async () => {
   if (!hasChanges.value) return
   
   isSaving.value = true
@@ -114,16 +110,17 @@ const onSubmit = handleSubmit(async (values) => {
   
   try {
     await StorageService.saveConfig({
-      serverUrl: values.serverUrl,
-      apiKey: values.apiKey,
-      autoSync: values.autoSync,
-      syncInterval: values.syncInterval,
+      serverUrl: formValues.value.serverUrl,
+      apiKey: formValues.value.apiKey,
+      autoSync: formValues.value.autoSync,
+      syncInterval: formValues.value.syncInterval,
+      iconSource: formValues.value.iconSource,
     })
     
     // 更新 API 实例以使用新的配置
     await SinanApiService.refreshInstance()
     
-    originalConfig.value = { ...values }
+    originalConfig.value = { ...formValues.value }
     saveButtonText.value = '保存成功'
     setTimeout(() => {
       saveButtonText.value = '保存'
@@ -137,7 +134,7 @@ const onSubmit = handleSubmit(async (values) => {
   } finally {
     isSaving.value = false
   }
-})
+}
 
 const handleSync = async () => {
   if (isSyncing.value) return
@@ -247,55 +244,113 @@ const handleDeleteBookmarks = async () => {
 <template>
   <div :class="mode" class="min-h-full">
     <div class="p-6 w-[360px] bg-background shadow-lg border border-border flex flex-col gap-6">
-      <!-- 标题和主题切换 -->
-      <div class="flex items-center justify-between">
-        <div class="text-lg text-primary flex items-center gap-2">
-          <span>Sinan 书签管理</span>
-        </div>
+      <!-- 标题 -->
+      <div class="text-lg text-primary flex items-center justify-center">
+        <span>Sinan 书签管理</span>
       </div>
 
-      <div class="border-b border-border" />
+      <!-- Tab导航 -->
+      <Tabs default-value="main">
+        <TabsList class="grid w-full grid-cols-2">
+          <TabsTrigger value="main">基础功能</TabsTrigger>
+          <TabsTrigger value="settings">系统配置</TabsTrigger>
+        </TabsList>
 
-      <!-- 表单区域 -->
-      <div class="space-y-4">
-        <!-- Sinan服务器地址 -->
-        <FormField v-slot="{ componentField }" name="serverUrl">
-          <FormItem>
-            <FormLabel>服务地址</FormLabel>
-            <FormControl>
-              <Input placeholder="请输入服务器地址" v-bind="componentField" autocomplete="off" />
-            </FormControl>
-          </FormItem>
-        </FormField>
+        <!-- 基础功能页面 -->
+        <TabsContent value="main" class="space-y-4">
+          <!-- 操作按钮 -->
+          <div class="flex flex-col gap-4">
+            <Button class="w-full" variant="default" @click="handleOpenSinan">打开Sinan主页</Button>
+            <div class="flex gap-2">
+              <Button 
+                class="flex-1" 
+                variant="outline" 
+                @click="handleSync"
+                :disabled="isSyncing || isLoading || isDeleting"
+              >
+                {{ syncButtonText }}
+              </Button>
+              <Button 
+                class="flex-1" 
+                variant="destructive" 
+                @click="handleDeleteBookmarks"
+                :disabled="isDeleting || isLoading || isSyncing"
+              >
+                {{ deleteButtonText }}
+              </Button>
+            </div>
+            
+            <!-- 同步状态提示 -->
+            <Alert v-if="syncAlert.show" :variant="syncAlert.type === 'error' ? 'destructive' : 'default'">
+              <AlertDescription>
+                {{ syncAlert.message }}
+              </AlertDescription>
+            </Alert>
+          </div>
 
-        <!-- 接口密钥地址 -->
-        <FormField v-slot="{ componentField }" name="apiKey">
-          <FormItem>
-            <FormLabel>接口密钥</FormLabel>
-            <FormControl>
-              <Input type="password" placeholder="请输入接口密钥" v-bind="componentField" autocomplete="off" />
-            </FormControl>
-          </FormItem>
-        </FormField>
+          <div class="border-b border-border" />
 
-        <!-- 自动同步和同步间隔 -->
-        <div class="flex items-center justify-between gap-4">
-          <!-- Switch 开关自动同步书签 -->
-          <FormField v-slot="{ componentField }" name="autoSync">
-            <FormItem class="flex items-center gap-2 space-y-0">
-              <FormLabel class="text-sm text-foreground font-medium">自动同步</FormLabel>
-              <FormControl>
-                <Switch v-bind="componentField" />
-              </FormControl>
-            </FormItem>
-          </FormField>
+          <!-- 最后同步时间 -->
+          <div class="text-xs text-muted-foreground text-center">最后同步时间：{{ lastSyncText }}</div>
+        </TabsContent>
 
-          <!-- 同步间隔时间 -->
-          <FormField v-slot="{ componentField }" name="syncInterval">
-            <FormItem class="flex items-center gap-2 space-y-0">
-              <FormLabel class="text-sm text-foreground font-medium">间隔</FormLabel>
-              <FormControl>
-                <Select v-bind="componentField">
+        <!-- 系统配置页面 -->
+        <TabsContent value="settings" class="space-y-4">
+          <!-- 表单区域 -->
+          <div class="space-y-4">
+            <!-- Sinan服务器地址 -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">服务地址</label>
+              <Input 
+                v-model="formValues.serverUrl" 
+                placeholder="请输入服务器地址" 
+                autocomplete="off" 
+              />
+            </div>
+
+            <!-- 接口密钥地址 -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">接口密钥</label>
+              <Input 
+                v-model="formValues.apiKey" 
+                type="password" 
+                placeholder="请输入接口密钥" 
+                autocomplete="off" 
+              />
+            </div>
+
+            <!-- 图标来源设置 -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">图标来源</label>
+              <Select 
+                v-model="formValues.iconSource"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择图标来源" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="google-s2">Google S2 (智能回退)</SelectItem>
+                  <SelectItem value="sinan">Sinan服务</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <!-- 自动同步和同步间隔 -->
+            <div class="flex items-center justify-between gap-4">
+              <!-- Switch 开关自动同步书签 -->
+              <div class="flex items-center gap-2 space-y-0">
+                <label class="text-sm text-foreground font-medium">自动同步</label>
+                <Switch 
+                  v-model="formValues.autoSync"
+                />
+              </div>
+
+              <!-- 同步间隔时间 -->
+              <div class="flex items-center gap-2 space-y-0">
+                <label class="text-sm text-foreground font-medium">间隔</label>
+                <Select 
+                  v-model="formValues.syncInterval"
+                >
                   <SelectTrigger class="w-20">
                     <SelectValue placeholder="选择" />
                   </SelectTrigger>
@@ -307,61 +362,24 @@ const handleDeleteBookmarks = async () => {
                     <SelectItem value="30">30</SelectItem>
                   </SelectContent>
                 </Select>
-              </FormControl>
-              <span class="text-xs text-muted-foreground">分钟</span>
-            </FormItem>
-          </FormField>
-        </div>
+                <span class="text-xs text-muted-foreground">分钟</span>
+              </div>
+            </div>
 
-        <div>
-          <Button 
-            type="button" 
-            class="w-full" 
-            variant="default" 
-            @click="onSubmit" 
-            :disabled="isLoading || !hasChanges || isSaving"
-          >
-            {{ saveButtonText }}
-          </Button>
-        </div>
-      </div>
-
-      <div class="border-b border-border" />
-
-      <!-- 操作按钮 -->
-      <div class="flex flex-col gap-4">
-        <Button class="w-full" variant="default" @click="handleOpenSinan">打开Sinan主页</Button>
-        <div class="flex gap-2">
-          <Button 
-            class="flex-1" 
-            variant="outline" 
-            @click="handleSync"
-            :disabled="isSyncing || isLoading || isDeleting"
-          >
-            {{ syncButtonText }}
-          </Button>
-          <Button 
-            class="flex-1" 
-            variant="destructive" 
-            @click="handleDeleteBookmarks"
-            :disabled="isDeleting || isLoading || isSyncing"
-          >
-            {{ deleteButtonText }}
-          </Button>
-        </div>
-        
-        <!-- 同步状态提示 -->
-        <Alert v-if="syncAlert.show" :variant="syncAlert.type === 'error' ? 'destructive' : 'default'">
-          <AlertDescription>
-            {{ syncAlert.message }}
-          </AlertDescription>
-        </Alert>
-      </div>
-
-      <div class="border-b border-border" />
-
-      <!-- 最后同步时间 -->
-      <div class="text-xs text-muted-foreground text-center">最后同步时间：{{ lastSyncText }}</div>
+            <div>
+              <Button 
+                type="button" 
+                class="w-full" 
+                variant="default" 
+                @click="onSubmit" 
+                :disabled="isLoading || !hasChanges || isSaving"
+              >
+                {{ saveButtonText }}
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   </div>
 </template>

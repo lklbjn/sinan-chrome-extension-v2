@@ -2,8 +2,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import Skeleton from "@/components/ui/skeleton/Skeleton.vue";
 import { onMounted, ref, computed, watch } from 'vue'
 import { SinanApiService } from '../../shared/services/api'
+import { IconService } from '../../shared/services/icon'
 import type { BookmarkResp } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
@@ -72,6 +74,9 @@ const searchBookmarks = async (query: string) => {
     if (response.code === 0) {
       bookmarks.value = response.data
       console.log('搜索完成:', response.data.length, '个书签')
+      
+      // 异步加载书签图标，不阻塞UI
+      preloadFaviconsAsync(response.data)
     } else if (response.code === -1) {
       errorAlert.value = {
         show: true,
@@ -117,6 +122,9 @@ const loadMostVisitedBookmarks = async () => {
     if (response.code === 0) {
       bookmarks.value = response.data
       console.log('加载最常访问书签成功:', response.data.length, '个书签')
+      
+      // 异步加载书签图标，不阻塞UI
+      preloadFaviconsAsync(response.data)
     } else if (response.code === -1) {
       errorAlert.value = {
         show: true,
@@ -241,12 +249,60 @@ const openSinanHomepage = () => {
   }
 }
 
-const getFavicon = (url: string) => {
+// 默认图标 - 使用扩展的图标
+const DEFAULT_ICON = '/icon48.png'
+
+// 缓存图标URL
+const faviconCache = ref<Map<string, string>>(new Map())
+// 跟踪正在加载的图标
+const loadingFavicons = ref<Set<string>>(new Set())
+
+// 异步加载图标，不阻塞UI
+const loadFaviconAsync = async (url: string) => {
+  if (faviconCache.value.has(url) || loadingFavicons.value.has(url)) {
+    return
+  }
+  
+  loadingFavicons.value.add(url)
+  
   try {
-    const domain = new URL(url).hostname
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
-  } catch {
-    return 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>'
+    const faviconUrl = await IconService.getFavicon(url)
+    faviconCache.value.set(url, faviconUrl)
+  } catch (error) {
+    console.warn('Failed to load favicon for', url, error)
+    // 设置默认图标
+    faviconCache.value.set(url, DEFAULT_ICON)
+  } finally {
+    loadingFavicons.value.delete(url)
+  }
+}
+
+// 获取缓存的图标URL，如果没有缓存则返回默认图标
+const getCachedFavicon = (url: string): string => {
+  return faviconCache.value.get(url) || DEFAULT_ICON
+}
+
+// 检查图标是否正在加载
+const isFaviconLoading = (url: string): boolean => {
+  return loadingFavicons.value.has(url)
+}
+
+// 检查图标是否已加载
+const isFaviconLoaded = (url: string): boolean => {
+  return faviconCache.value.has(url)
+}
+
+// 异步加载书签图标，不阻塞UI
+const preloadFaviconsAsync = (bookmarkList: BookmarkResp[]) => {
+  bookmarkList.forEach((bookmark) => {
+    loadFaviconAsync(bookmark.url)
+  })
+}
+
+// 确保当书签显示时图标开始加载
+const ensureFaviconLoading = (url: string) => {
+  if (!isFaviconLoaded(url) && !isFaviconLoading(url)) {
+    loadFaviconAsync(url)
   }
 }
 
@@ -405,8 +461,21 @@ watch(searchQuery, (newQuery) => {
                   : 'shadow-sm hover:shadow-md dark:hover:shadow-lg'
               ]">
         <div class="flex items-center gap-3 h-full w-full overflow-hidden">
-          <img :src="getFavicon(bookmark.url)" :alt="bookmark.name" class="w-8 h-8 rounded flex-shrink-0"
-            @error="($event.target as HTMLImageElement).style.display = 'none'" />
+          <!-- 图标加载状态：skeleton -> 加载完成的图标 -->
+          <div class="w-8 h-8 flex-shrink-0 flex items-center justify-center">
+            <Skeleton 
+              v-if="isFaviconLoading(bookmark.url) || !isFaviconLoaded(bookmark.url)" 
+              class="w-8 h-8 rounded" 
+              @vue:mounted="ensureFaviconLoading(bookmark.url)"
+            />
+            <img 
+              v-else
+              :src="getCachedFavicon(bookmark.url)" 
+              :alt="bookmark.name" 
+              class="w-8 h-8 rounded"
+              @error="($event.target as HTMLImageElement).style.display = 'none'" 
+            />
+          </div>
           <div class="flex-1 min-w-0 overflow-hidden">
             <p class="text-sm font-medium truncate max-w-full">{{ bookmark.name }}</p>
             <p class="text-xs text-muted-foreground truncate max-w-full">{{ bookmark.url }}</p>
