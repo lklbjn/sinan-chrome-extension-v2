@@ -7,6 +7,7 @@ import { onMounted, ref, computed, watch } from 'vue'
 import { SinanApiService } from '../../shared/services/api'
 import { IconService } from '../../shared/services/icon'
 import { IconCacheService } from '../../shared/services/iconCache'
+import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
 import type { BookmarkResp } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
@@ -76,6 +77,12 @@ const searchBookmarks = async (query: string) => {
       bookmarks.value = response.data
       console.log('搜索完成:', response.data.length, '个书签')
       
+      // 如果是获取最常访问的书签（无搜索关键词），保存到缓存
+      if (!query.trim()) {
+        const limit = calculateBookmarksLimit()
+        await BookmarkCacheService.saveBookmarksToCache(response.data, limit)
+      }
+      
       // 异步加载书签图标，不阻塞UI
       preloadFaviconsAsync(response.data)
     } else if (response.code === -1) {
@@ -112,17 +119,53 @@ const filteredBookmarks = computed(() => {
   return bookmarks.value
 })
 
-const loadMostVisitedBookmarks = async () => {
+// 从缓存加载书签
+const loadBookmarksFromCache = async (limit: number) => {
+  try {
+    const cachedBookmarks = await BookmarkCacheService.getCachedBookmarks(limit)
+    if (cachedBookmarks && cachedBookmarks.length > 0) {
+      bookmarks.value = cachedBookmarks
+      console.log('从缓存加载书签成功:', cachedBookmarks.length, '个书签')
+      
+      // 异步加载缓存书签的图标
+      preloadFaviconsAsync(cachedBookmarks)
+      
+      // 设置加载完成，显示缓存内容
+      isLoading.value = false
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('加载缓存书签失败:', error)
+    return false
+  }
+}
+
+const loadMostVisitedBookmarks = async (useCache = true) => {
   try {
     errorAlert.value.show = false
 
     // 动态计算需要的书签数量
     const limit = calculateBookmarksLimit()
+    
+    // 首先尝试从缓存加载（如果启用）
+    if (useCache) {
+      const cacheLoaded = await loadBookmarksFromCache(limit)
+      // 如果缓存加载成功，继续在后台获取最新数据
+      if (cacheLoaded) {
+        console.log('缓存加载成功，后台获取最新数据...')
+      }
+    }
+
+    // 获取最新的书签数据
     const response = await SinanApiService.getMostVisitedBookmarks({ limit })
 
     if (response.code === 0) {
       bookmarks.value = response.data
       console.log('加载最常访问书签成功:', response.data.length, '个书签')
+      
+      // 保存到缓存
+      await BookmarkCacheService.saveBookmarksToCache(response.data, limit)
       
       // 异步加载书签图标，不阻塞UI
       preloadFaviconsAsync(response.data)
@@ -137,9 +180,24 @@ const loadMostVisitedBookmarks = async () => {
     }
   } catch (error) {
     console.error('加载书签时出错:', error)
-    errorAlert.value = {
-      show: true,
-      message: `网络请求失败: ${error instanceof Error ? error.message : String(error)}`
+    
+    // 如果没有使用缓存且出错，尝试使用缓存
+    if (useCache && bookmarks.value.length === 0) {
+      const limit = calculateBookmarksLimit()
+      const cacheLoaded = await loadBookmarksFromCache(limit)
+      if (cacheLoaded) {
+        console.log('网络请求失败，使用缓存数据')
+      } else {
+        errorAlert.value = {
+          show: true,
+          message: `网络请求失败: ${error instanceof Error ? error.message : String(error)}`
+        }
+      }
+    } else if (!useCache) {
+      errorAlert.value = {
+        show: true,
+        message: `网络请求失败: ${error instanceof Error ? error.message : String(error)}`
+      }
     }
   } finally {
     isLoading.value = false
@@ -238,7 +296,8 @@ const incrementUsageAndOpenBackground = async (bookmark: BookmarkResp) => {
 const handleRefresh = async () => {
   if (isRefreshing.value) return
   isRefreshing.value = true
-  await loadMostVisitedBookmarks()
+  // 刷新时不使用缓存，强制从服务器获取最新数据
+  await loadMostVisitedBookmarks(false)
 }
 
 const openSinanHomepage = () => {
