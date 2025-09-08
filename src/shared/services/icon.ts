@@ -1,51 +1,7 @@
 import { StorageService } from './storage'
 
 export class IconService {
-  private static googleS2Available: boolean | null = null
   private static readonly DEFAULT_ICON = '/icon48.png'
-  
-  /**
-   * 检查 Google S2 服务是否可用
-   */
-  private static async isGoogleS2Available(): Promise<boolean> {
-    // 如果已经检查过，直接返回缓存结果
-    if (this.googleS2Available !== null) {
-      return this.googleS2Available
-    }
-    
-    try {
-      // 使用一个简单的域名测试 Google S2 服务
-      const testUrl = 'https://www.google.com/s2/favicons?domain=google.com&sz=16'
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5秒超时
-      
-      const response = await fetch(testUrl, {
-        method: 'HEAD',
-        signal: controller.signal,
-        cache: 'no-cache'
-      })
-      
-      clearTimeout(timeoutId)
-      this.googleS2Available = response.ok
-      
-      // 缓存结果30分钟
-      setTimeout(() => {
-        this.googleS2Available = null
-      }, 30 * 60 * 1000)
-      
-      return this.googleS2Available
-    } catch (error) {
-      console.warn('Google S2 service unavailable:', error)
-      this.googleS2Available = false
-      
-      // 如果失败，缓存失败结果5分钟后重试
-      setTimeout(() => {
-        this.googleS2Available = null
-      }, 5 * 60 * 1000)
-      
-      return false
-    }
-  }
   
   /**
    * 从 Sinan 服务获取 favicon
@@ -92,12 +48,14 @@ export class IconService {
   
   /**
    * 获取 favicon URL
-   * 优先使用 Google S2，如果不可用则使用 Sinan 服务
+   * 根据用户配置选择图标服务
    */
   static async getFavicon(url: string): Promise<string> {
     try {
       const domain = new URL(url).hostname
       const config = await StorageService.getConfig()
+      
+      console.log('[IconService] 获取图标配置:', config.iconSource, '域名:', domain)
       
       // 如果用户明确选择了 Sinan 服务，直接使用
       if (config.iconSource === 'sinan') {
@@ -109,24 +67,15 @@ export class IconService {
         }
       }
       
-      // 否则使用智能策略：优先 Google S2，失败则使用 Sinan
+      // 如果用户选择了 Google S2，直接返回 Google S2 URL
+      // 不再进行可用性检查，让浏览器自己处理
       if (config.iconSource === 'google-s2') {
-        const isGoogleAvailable = await this.isGoogleS2Available()
-        
-        if (isGoogleAvailable) {
-          return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
-        } else {
-          console.log('Google S2 不可用，回退到 Sinan 服务')
-          try {
-            return await this.getSinanFavicon(domain)
-          } catch (error) {
-            console.warn('Sinan favicon failed, using default icon:', error)
-            return this.DEFAULT_ICON
-          }
-        }
+        const googleUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+        console.log('[IconService] 使用 Google S2 服务:', googleUrl)
+        return googleUrl
       }
       
-      // 默认情况
+      // 默认使用 Google S2
       return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
       
     } catch (error) {

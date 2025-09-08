@@ -6,6 +6,7 @@ import Skeleton from "@/components/ui/skeleton/Skeleton.vue";
 import { onMounted, ref, computed, watch } from 'vue'
 import { SinanApiService } from '../../shared/services/api'
 import { IconService } from '../../shared/services/icon'
+import { IconCacheService } from '../../shared/services/iconCache'
 import type { BookmarkResp } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
@@ -266,12 +267,19 @@ const loadFaviconAsync = async (url: string) => {
   loadingFavicons.value.add(url)
   
   try {
+    console.log('[Newtab] 开始加载图标:', url)
     const faviconUrl = await IconService.getFavicon(url)
+    console.log('[Newtab] 获取到图标URL:', faviconUrl)
     faviconCache.value.set(url, faviconUrl)
+    
+    // 保存到持久化缓存
+    await IconCacheService.saveIconToCache(url, faviconUrl)
   } catch (error) {
     console.warn('Failed to load favicon for', url, error)
     // 设置默认图标
     faviconCache.value.set(url, DEFAULT_ICON)
+    // 也保存默认图标到缓存
+    await IconCacheService.saveIconToCache(url, DEFAULT_ICON)
   } finally {
     loadingFavicons.value.delete(url)
   }
@@ -292,11 +300,52 @@ const isFaviconLoaded = (url: string): boolean => {
   return faviconCache.value.has(url)
 }
 
+// 从持久化缓存加载图标
+const loadCachedIcons = async () => {
+  try {
+    console.log('加载缓存的图标...')
+    const cachedIcons = await IconCacheService.getCachedIcons()
+    
+    // 将缓存的图标添加到内存缓存
+    cachedIcons.forEach((faviconUrl, url) => {
+      faviconCache.value.set(url, faviconUrl)
+    })
+    
+    console.log(`成功加载 ${cachedIcons.size} 个缓存图标`)
+  } catch (error) {
+    console.error('加载缓存图标失败:', error)
+  }
+}
+
 // 异步加载书签图标，不阻塞UI
 const preloadFaviconsAsync = (bookmarkList: BookmarkResp[]) => {
   bookmarkList.forEach((bookmark) => {
     loadFaviconAsync(bookmark.url)
   })
+  
+  // 可选：等待所有图标加载完成后批量保存到缓存
+  // 这样可以减少频繁的存储操作
+  Promise.all(
+    bookmarkList.map(bookmark => loadFaviconAsync(bookmark.url))
+  ).then(() => {
+    // 批量保存当前缓存状态
+    saveCacheState()
+  }).catch(error => {
+    console.warn('Some icons failed to load:', error)
+    // 即使有失败的，也保存成功加载的
+    saveCacheState()
+  })
+}
+
+// 保存当前缓存状态
+const saveCacheState = async () => {
+  try {
+    if (faviconCache.value.size > 0) {
+      await IconCacheService.saveBatchToCache(faviconCache.value)
+    }
+  } catch (error) {
+    console.error('保存图标缓存失败:', error)
+  }
 }
 
 // 确保当书签显示时图标开始加载
@@ -318,7 +367,7 @@ const toggleDarkMode = () => {
   localStorage.setItem('darkMode', isDarkMode.value.toString())
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 从本地存储读取暗黑模式设置
   const savedDarkMode = localStorage.getItem('darkMode')
   if (savedDarkMode === 'true') {
@@ -336,6 +385,10 @@ onMounted(() => {
     }
   }
 
+  // 首先加载缓存的图标
+  await loadCachedIcons()
+
+  // 然后加载最常访问的书签
   loadMostVisitedBookmarks()
 
   // 监听窗口大小变化，重新计算书签数量

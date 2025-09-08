@@ -23,11 +23,10 @@ export class StorageService {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
         chrome.storage.sync.get(this.STORAGE_KEY, (result: any) => {
           const config = result[this.STORAGE_KEY];
-          if (config) {
-            resolve({ ...DEFAULT_CONFIG, ...config });
-          } else {
-            resolve(DEFAULT_CONFIG);
-          }
+          const finalConfig = config ? { ...DEFAULT_CONFIG, ...config } : DEFAULT_CONFIG;
+          console.log('[StorageService] 读取配置:', finalConfig);
+          console.log('[StorageService] iconSource:', finalConfig.iconSource);
+          resolve(finalConfig);
         });
       } else {
         // Fallback to localStorage for development
@@ -44,6 +43,8 @@ export class StorageService {
   static async saveConfig(config: Partial<SinanConfig>): Promise<void> {
     const currentConfig = await this.getConfig();
     const newConfig = { ...currentConfig, ...config };
+    console.log('[StorageService] 保存配置:', newConfig);
+    console.log('[StorageService] 保存的 iconSource:', newConfig.iconSource);
     
     return new Promise((resolve, reject) => {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {

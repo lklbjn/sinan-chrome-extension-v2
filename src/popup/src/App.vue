@@ -19,6 +19,7 @@ import { onMounted, ref, computed } from 'vue'
 import { StorageService } from '../../shared/services/storage'
 import { SinanApiService } from '../../shared/services/api'
 import { BookmarkService } from '../../shared/services/bookmark'
+import { IconCacheService } from '../../shared/services/iconCache'
 
 const mode = useColorMode({
   modes: {
@@ -100,6 +101,7 @@ onMounted(async () => {
   } finally {
     isLoading.value = false
   }
+  
 })
 
 const onSubmit = async () => {
@@ -120,6 +122,11 @@ const onSubmit = async () => {
     // 更新 API 实例以使用新的配置
     await SinanApiService.refreshInstance()
     
+    // 如果图标来源发生变化，清除图标缓存
+    if (originalConfig.value.iconSource !== formValues.value.iconSource) {
+      await IconCacheService.clearCache()
+    }
+    
     originalConfig.value = { ...formValues.value }
     saveButtonText.value = '保存成功'
     setTimeout(() => {
@@ -134,6 +141,11 @@ const onSubmit = async () => {
   } finally {
     isSaving.value = false
   }
+}
+
+const handleReset = () => {
+  // 恢复到原始配置
+  formValues.value = { ...originalConfig.value }
 }
 
 const handleSync = async () => {
@@ -238,6 +250,7 @@ const handleDeleteBookmarks = async () => {
     isDeleting.value = false
   }
 }
+
 </script>
 
 
@@ -329,7 +342,7 @@ const handleDeleteBookmarks = async () => {
                   <SelectValue placeholder="选择图标来源" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="google-s2">Google S2 (智能回退)</SelectItem>
+                  <SelectItem value="google-s2">Google S2</SelectItem>
                   <SelectItem value="sinan">Sinan服务</SelectItem>
                 </SelectContent>
               </Select>
@@ -366,15 +379,24 @@ const handleDeleteBookmarks = async () => {
               </div>
             </div>
 
-            <div>
+            <div class="flex gap-2">
               <Button 
                 type="button" 
-                class="w-full" 
-                variant="default" 
+                class="flex-1" 
+                :variant="hasChanges ? 'destructive' : 'default'"
                 @click="onSubmit" 
                 :disabled="isLoading || !hasChanges || isSaving"
               >
                 {{ saveButtonText }}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                @click="handleReset" 
+                :disabled="isLoading || !hasChanges || isSaving"
+                class="px-3"
+              >
+                重置
               </Button>
             </div>
           </div>
