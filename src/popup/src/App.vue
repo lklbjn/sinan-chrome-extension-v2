@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Textarea from "@/components/ui/textarea/Textarea.vue";
 import {
   Select,
   SelectContent,
@@ -20,6 +21,7 @@ import { StorageService } from '../../shared/services/storage'
 import { SinanApiService } from '../../shared/services/api'
 import { BookmarkService } from '../../shared/services/bookmark'
 import { IconCacheService } from '../../shared/services/iconCache'
+import type { SnSpace } from '../../shared/types/api'
 
 const mode = useColorMode({
   modes: {
@@ -40,6 +42,21 @@ const syncButtonText = ref('重新同步')
 const isDeleting = ref(false)
 const deleteButtonText = ref('删除书签目录')
 const syncAlert = ref<{ show: boolean; type: 'success' | 'error'; message: string }>({
+  show: false,
+  type: 'success',
+  message: ''
+})
+
+// 新增书签相关状态
+const isAddingBookmark = ref(false)
+const namespaces = ref<SnSpace[]>([])
+const currentTab = ref({
+  title: '',
+  url: '',
+  description: '',
+  namespaceId: ''
+})
+const addBookmarkAlert = ref<{ show: boolean; type: 'success' | 'error'; message: string }>({
   show: false,
   type: 'success',
   message: ''
@@ -96,6 +113,9 @@ onMounted(async () => {
     }
     
     lastSyncTime.value = config.lastSyncTime
+    
+    // 初始化当前标签页信息
+    await refreshCurrentTabInfo()
   } catch (error) {
     console.error('Failed to load config:', error)
   } finally {
@@ -146,6 +166,17 @@ const onSubmit = async () => {
 const handleReset = () => {
   // 恢复到原始配置
   formValues.value = { ...originalConfig.value }
+}
+
+const handleRestoreDefault = () => {
+  // 恢复到默认配置
+  formValues.value = {
+    serverUrl: 'https://sinan.host/api',
+    apiKey: '',
+    autoSync: false,
+    syncInterval: '30',
+    iconSource: 'google-s2',
+  }
 }
 
 const handleSync = async () => {
@@ -251,6 +282,213 @@ const handleDeleteBookmarks = async () => {
   }
 }
 
+// 获取当前标签页信息
+const getCurrentTabInfo = async () => {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tab) {
+        currentTab.value.title = tab.title || ''
+        currentTab.value.url = tab.url || ''
+        
+        console.log('获取到基本标签页信息:', { title: tab.title, url: tab.url })
+        
+        // 尝试获取页面的描述信息
+        try {
+          if (tab.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('moz-extension://')) {
+            console.log('尝试执行content script获取描述信息...', { tabId: tab.id, url: tab.url })
+            
+            // 先检查是否有权限
+            try {
+              await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => { return 'test' }
+              })
+              console.log('权限检查通过')
+            } catch (permError) {
+              console.log('权限检查失败:', permError)
+              return
+            }
+            
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: () => {
+                try {
+                  // 更全面的选择器
+                  const selectors = [
+                    'meta[name="description"]',
+                    'meta[name="Description"]',
+                    'meta[property="og:description"]',
+                    'meta[property="og:Description"]',
+                    'meta[name="twitter:description"]',
+                    'meta[name="twitter:Description"]'
+                  ]
+                  
+                  let description = ''
+                  
+                  for (const selector of selectors) {
+                    const meta = document.querySelector(selector)
+                    if (meta) {
+                      const content = meta.getAttribute('content')
+                      if (content && content.trim().length > 0) {
+                        description = content.trim()
+                        break
+                      }
+                    }
+                  }
+                  
+                  // 如果还是没找到，尝试获取页面的第一个段落
+                  if (!description) {
+                    const firstP = document.querySelector('p')
+                    if (firstP && firstP.textContent) {
+                      description = firstP.textContent.trim().substring(0, 200)
+                    }
+                  }
+                  
+                  return {
+                    description,
+                    metaTags: selectors.map(sel => {
+                      const meta = document.querySelector(sel)
+                      return {
+                        selector: sel,
+                        content: meta?.getAttribute('content') || null
+                      }
+                    })
+                  }
+                } catch (err) {
+                  return { error: err instanceof Error ? err.message : String(err), description: '' }
+                }
+              }
+            })
+            
+            console.log('Content script执行结果:', results)
+            
+            if (results[0]?.result) {
+              const result = results[0].result
+              if (result.description) {
+                currentTab.value.description = result.description
+                console.log('成功获取描述:', result.description)
+              } else {
+                console.log('未找到有效的描述信息，meta标签情况:', result.metaTags)
+              }
+            }
+          } else {
+            console.log('跳过特殊页面的描述获取:', tab.url)
+          }
+        } catch (error) {
+          console.log('获取页面描述失败:', error)
+          if (error instanceof Error) {
+            console.log('错误详情:', error.message)
+            if (error.message?.includes('Cannot access')) {
+              console.log('权限不足，无法获取页面描述')
+            }
+          }
+        }
+        
+        console.log('最终获取的标签页信息:', currentTab.value)
+      }
+    }
+  } catch (error) {
+    console.error('获取当前标签页信息失败:', error)
+  }
+}
+
+// 获取所有namespace
+const loadNamespaces = async () => {
+  try {
+    const response = await SinanApiService.getSpaces()
+    if (response.code === 0) {
+      namespaces.value = response.data
+      
+      // 如果没有选中的namespace，默认选择第一个
+      if (namespaces.value.length > 0 && !currentTab.value.namespaceId) {
+        currentTab.value.namespaceId = namespaces.value[0].id
+      }
+      
+      console.log('加载namespace成功:', response.data.length, '个空间')
+    } else {
+      console.error('获取namespace列表失败:', response.message)
+    }
+  } catch (error) {
+    console.error('获取namespace列表时出错:', error)
+  }
+}
+
+// 刷新当前标签页信息
+const refreshCurrentTabInfo = async () => {
+  console.log('刷新标签页信息开始...')
+  addBookmarkAlert.value.show = false
+  
+  // 清空当前信息
+  currentTab.value = {
+    title: '',
+    url: '',
+    description: '',
+    namespaceId: ''
+  }
+  
+  await getCurrentTabInfo()
+  await loadNamespaces()
+  console.log('刷新标签页信息完成')
+}
+
+// 添加书签到Sinan
+const addBookmarkToSinan = async () => {
+  if (!currentTab.value.title.trim() || !currentTab.value.url.trim()) {
+    addBookmarkAlert.value = {
+      show: true,
+      type: 'error',
+      message: '书签名称和网址不能为空'
+    }
+    return
+  }
+
+  isAddingBookmark.value = true
+  
+  try {
+    const response = await SinanApiService.addBookmark({
+      name: currentTab.value.title.trim(),
+      url: currentTab.value.url.trim(),
+      description: currentTab.value.description.trim() || undefined,
+      namespaceId: currentTab.value.namespaceId || undefined
+    })
+
+    if (response.code === 0) {
+      console.log('书签添加成功:', response.data)
+      addBookmarkAlert.value = {
+        show: true,
+        type: 'success',
+        message: '书签添加成功！'
+      }
+      
+      // 3秒后自动隐藏成功提示
+      setTimeout(() => {
+        addBookmarkAlert.value.show = false
+      }, 3000)
+    } else {
+      addBookmarkAlert.value = {
+        show: true,
+        type: 'error',
+        message: `添加书签失败: ${response.message}`
+      }
+    }
+  } catch (error) {
+    console.error('添加书签失败:', error)
+    addBookmarkAlert.value = {
+      show: true,
+      type: 'error',
+      message: `添加书签失败: ${error instanceof Error ? error.message : String(error)}`
+    }
+  } finally {
+    isAddingBookmark.value = false
+  }
+}
+
+// 切换黑夜模式
+const toggleDarkMode = () => {
+  mode.value = mode.value === 'dark' ? 'light' : 'dark'
+}
+
 </script>
 
 
@@ -258,14 +496,29 @@ const handleDeleteBookmarks = async () => {
   <div :class="mode" class="min-h-full">
     <div class="p-6 w-[360px] bg-background shadow-lg border border-border flex flex-col gap-6">
       <!-- 标题 -->
-      <div class="text-lg text-primary flex items-center justify-center">
+      <div class="text-lg text-primary flex items-center justify-between">
         <span>Sinan 书签管理</span>
+        <!-- 黑夜模式切换按钮 -->
+        <Button variant="ghost" size="icon" @click="toggleDarkMode" class="h-8 w-8">
+          <!-- 太阳图标（浅色模式） -->
+          <svg v-if="mode === 'dark'" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+          </svg>
+          <!-- 月亮图标（暗黑模式） -->
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </Button>
       </div>
 
       <!-- Tab导航 -->
-      <Tabs default-value="main">
-        <TabsList class="grid w-full grid-cols-2">
+      <Tabs default-value="bookmark">
+        <TabsList class="grid w-full grid-cols-3">
           <TabsTrigger value="main">基础功能</TabsTrigger>
+          <TabsTrigger value="bookmark">添加书签</TabsTrigger>
           <TabsTrigger value="settings">系统配置</TabsTrigger>
         </TabsList>
 
@@ -305,6 +558,95 @@ const handleDeleteBookmarks = async () => {
 
           <!-- 最后同步时间 -->
           <div class="text-xs text-muted-foreground text-center">最后同步时间：{{ lastSyncText }}</div>
+        </TabsContent>
+
+        <!-- 添加书签页面 -->
+        <TabsContent value="bookmark" class="space-y-4">
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm font-medium mb-1 block">网址</label>
+              <Input 
+                v-model="currentTab.url" 
+                placeholder="https://example.com" 
+                class="w-full text-xs"
+                readonly
+              />
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium mb-1 block">书签名称 *</label>
+              <Input 
+                v-model="currentTab.title" 
+                placeholder="输入书签名称" 
+                class="w-full"
+              />
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium mb-1 block">描述</label>
+              <Textarea 
+                v-model="currentTab.description" 
+                placeholder="输入描述（可选）" 
+                class="w-full resize-none max-h-[4.5rem] overflow-y-auto"
+                rows="3"
+              />
+            </div>
+            
+            <div>
+              <label class="text-sm font-medium mb-1 block">选择空间</label>
+              <Select v-model="currentTab.namespaceId">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="选择一个空间" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem 
+                    v-for="namespace in namespaces" 
+                    :key="namespace.id" 
+                    :value="namespace.id"
+                  >
+                    {{ namespace.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <!-- 提示信息 -->
+          <Alert v-if="addBookmarkAlert.show" :variant="addBookmarkAlert.type === 'error' ? 'destructive' : 'default'">
+            <AlertDescription>
+              {{ addBookmarkAlert.message }}
+            </AlertDescription>
+          </Alert>
+          
+          <!-- 操作按钮 -->
+          <div class="flex gap-2">
+            <Button 
+              class="flex-1" 
+              variant="outline" 
+              @click="refreshCurrentTabInfo"
+              :disabled="isAddingBookmark"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                <path d="M3 21v-5h5" />
+              </svg>
+              刷新页面信息
+            </Button>
+            <Button 
+              class="flex-1" 
+              @click="addBookmarkToSinan" 
+              :disabled="isAddingBookmark"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              {{ isAddingBookmark ? '添加中...' : '添加书签' }}
+            </Button>
+          </div>
         </TabsContent>
 
         <!-- 系统配置页面 -->
@@ -379,24 +721,43 @@ const handleDeleteBookmarks = async () => {
               </div>
             </div>
 
-            <div class="flex gap-2">
+            <div class="space-y-2">
+              <div class="flex gap-2">
+                <Button 
+                  type="button" 
+                  class="flex-1" 
+                  :variant="hasChanges ? 'destructive' : 'default'"
+                  @click="onSubmit" 
+                  :disabled="isLoading || !hasChanges || isSaving"
+                >
+                  {{ saveButtonText }}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  @click="handleReset" 
+                  :disabled="isLoading || !hasChanges || isSaving"
+                  class="px-3"
+                >
+                  重置
+                </Button>
+              </div>
+              
               <Button 
                 type="button" 
-                class="flex-1" 
-                :variant="hasChanges ? 'destructive' : 'default'"
-                @click="onSubmit" 
-                :disabled="isLoading || !hasChanges || isSaving"
+                variant="secondary" 
+                @click="handleRestoreDefault" 
+                :disabled="isLoading || isSaving"
+                class="w-full"
               >
-                {{ saveButtonText }}
-              </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
-                @click="handleReset" 
-                :disabled="isLoading || !hasChanges || isSaving"
-                class="px-3"
-              >
-                重置
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+                恢复默认配置
               </Button>
             </div>
           </div>

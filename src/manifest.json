@@ -18,7 +18,7 @@
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
-  "permissions": ["storage", "tabs", "bookmarks", "alarms"],
+  "permissions": ["storage", "tabs", "bookmarks", "alarms", "scripting", "activeTab"],
   "omnibox": {
     "keyword": "bm"
   },

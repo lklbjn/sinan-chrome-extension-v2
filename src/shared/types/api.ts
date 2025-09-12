@@ -50,7 +50,24 @@ export interface MostVisitedParams {
   search?: string;
 }
 
+export interface SnSpace {
+  id: string;
+  userId: string;
+  name: string;
+  pinyin: string;
+  abbreviation: string;
+  icon: string;
+  sort: number;
+  share: boolean;
+  shareKey: string;
+  description: string;
+  createTime: string;
+  updateTime: string;
+  deleted: number;
+}
+
 export type ResultBookmarkResp = ApiResult<BookmarkResp>;
 export type ResultListBookmarkResp = ApiResult<BookmarkResp[]>;
 export type ResultListBookmarkTreeResp = ApiResult<BookmarkTreeResp[]>;
+export type ResultListSnSpace = ApiResult<SnSpace[]>;
 export type ResultString = ApiResult<string>;

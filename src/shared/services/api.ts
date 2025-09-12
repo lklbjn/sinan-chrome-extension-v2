@@ -4,6 +4,7 @@ import type {
   ResultBookmarkResp,
   ResultListBookmarkResp,
   ResultListBookmarkTreeResp,
+  ResultListSnSpace,
   ResultString,
   MostVisitedParams,
 } from '../types/api';
@@ -83,6 +84,11 @@ export class SinanApiService {
       ...(params.search && { search: params.search }),
     });
     const response = await this.fetchWithConfig(`/api/most-visited?${searchParams}`);
+    return response.json();
+  }
+
+  static async getSpaces(): Promise<ResultListSnSpace> {
+    const response = await this.fetchWithConfig('/api/spaces');
     return response.json();
   }
 

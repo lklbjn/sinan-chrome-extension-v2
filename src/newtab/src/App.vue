@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Textarea from "@/components/ui/textarea/Textarea.vue";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Skeleton from "@/components/ui/skeleton/Skeleton.vue";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { onMounted, ref, computed, watch } from 'vue'
 import { SinanApiService } from '../../shared/services/api'
 import { IconService } from '../../shared/services/icon'
 import { IconCacheService } from '../../shared/services/iconCache'
 import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
-import type { BookmarkResp } from '../../shared/types/api'
+import type { BookmarkResp, SnSpace } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
 const searchQuery = ref('')
@@ -23,6 +25,19 @@ const errorAlert = ref<{ show: boolean; message: string }>({
 
 // 暗黑模式状态
 const isDarkMode = ref(false)
+
+// 新增书签对话框状态
+const showAddBookmarkDialog = ref(false)
+const newBookmark = ref({
+  name: '',
+  url: '',
+  description: '',
+  namespaceId: ''
+})
+
+// namespace相关状态
+const namespaces = ref<SnSpace[]>([])
+const isLoadingNamespaces = ref(false)
 
 // 计算屏幕可显示的书签数量
 const calculateBookmarksLimit = () => {
@@ -309,6 +324,208 @@ const openSinanHomepage = () => {
   }
 }
 
+// 打开新增书签对话框
+const openAddBookmarkDialog = async () => {
+  showAddBookmarkDialog.value = true
+  await loadNamespaces()
+  
+  // 尝试读取剪切板内容
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const clipboardText = await navigator.clipboard.readText()
+      const trimmedText = clipboardText.trim()
+      
+      // 检查剪切板内容是否是有效的URL
+      if (trimmedText && (trimmedText.startsWith('http://') || trimmedText.startsWith('https://') || trimmedText.startsWith('www.'))) {
+        // 如果是www开头，自动添加https://
+        const url = trimmedText.startsWith('www.') ? `https://${trimmedText}` : trimmedText
+        newBookmark.value.url = url
+        console.log('从剪切板获取URL:', url)
+        
+        // 自动获取网页标题
+        setTimeout(() => {
+          fetchTitleFromUrl()
+        }, 100) // 延迟一点执行，确保URL已经设置
+      }
+    }
+  } catch (error) {
+    console.log('读取剪切板失败:', error)
+    // 忽略剪切板读取错误，不影响用户体验
+  }
+}
+
+// 关闭新增书签对话框
+const closeAddBookmarkDialog = () => {
+  showAddBookmarkDialog.value = false
+  // 重置表单
+  newBookmark.value = {
+    name: '',
+    url: '',
+    description: '',
+    namespaceId: ''
+  }
+}
+
+// 获取网址标题和描述
+const fetchTitleFromUrl = async () => {
+  const url = newBookmark.value.url.trim()
+  
+  // 如果URL为空，则不自动获取
+  if (!url) {
+    return
+  }
+  
+  try {
+    // 验证URL格式
+    const urlObject = new URL(url.startsWith('http') ? url : `https://${url}`)
+    
+    // 发起请求获取页面内容
+    const response = await fetch(urlObject.toString(), {
+      method: 'GET',
+      mode: 'cors',
+    })
+    
+    if (response.ok) {
+      const html = await response.text()
+      
+      // 只有在书签名称为空时才自动获取标题
+      if (!newBookmark.value.name.trim()) {
+        const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+        if (titleMatch && titleMatch[1]) {
+          const title = titleMatch[1].trim()
+          if (title) {
+            newBookmark.value.name = title
+            console.log('自动获取网页标题:', title)
+          }
+        }
+      }
+      
+      // 只有在描述为空时才自动获取描述
+      if (!newBookmark.value.description.trim()) {
+        // 尝试获取多种description meta标签
+        const descriptionPatterns = [
+          /<meta\s+name=["\']description["\']\s+content=["\']([^"\']*)["\'][^>]*>/i,
+          /<meta\s+content=["\']([^"\']*)["\'][^>]*\s+name=["\']description["\']/i,
+          /<meta\s+property=["\']og:description["\']\s+content=["\']([^"\']*)["\'][^>]*>/i,
+          /<meta\s+name=["\']twitter:description["\']\s+content=["\']([^"\']*)["\'][^>]*>/i
+        ]
+        
+        for (const pattern of descriptionPatterns) {
+          const descMatch = html.match(pattern)
+          if (descMatch && descMatch[1]) {
+            const description = descMatch[1].trim()
+            if (description && description.length > 10) { // 确保描述有意义
+              newBookmark.value.description = description
+              console.log('自动获取网页描述:', description)
+              break
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.log('获取网页信息失败:', error)
+    // 如果获取失败，尝试使用URL的域名作为名称（仅在名称为空时）
+    if (!newBookmark.value.name.trim()) {
+      try {
+        const urlObject = new URL(url.startsWith('http') ? url : `https://${url}`)
+        const hostname = urlObject.hostname.replace('www.', '')
+        newBookmark.value.name = hostname
+        console.log('使用域名作为书签名称:', hostname)
+      } catch (urlError) {
+        console.log('URL解析失败:', urlError)
+      }
+    }
+  }
+}
+
+// 获取所有namespace
+const loadNamespaces = async () => {
+  if (isLoadingNamespaces.value) return
+  
+  isLoadingNamespaces.value = true
+  try {
+    const response = await SinanApiService.getSpaces()
+    if (response.code === 0) {
+      namespaces.value = response.data
+      console.log('加载namespace成功:', response.data.length, '个空间')
+      
+      // 如果没有选中的namespace，默认选择第一个
+      if (namespaces.value.length > 0 && !newBookmark.value.namespaceId) {
+        newBookmark.value.namespaceId = namespaces.value[0].id
+      }
+    } else {
+      console.error('获取namespace列表失败:', response.message)
+      errorAlert.value = {
+        show: true,
+        message: `获取空间列表失败: ${response.message}`
+      }
+      setTimeout(() => {
+        errorAlert.value.show = false
+      }, 3000)
+    }
+  } catch (error) {
+    console.error('获取namespace列表时出错:', error)
+    errorAlert.value = {
+      show: true,
+      message: `获取空间列表失败: ${error instanceof Error ? error.message : String(error)}`
+    }
+    setTimeout(() => {
+      errorAlert.value.show = false
+    }, 3000)
+  } finally {
+    isLoadingNamespaces.value = false
+  }
+}
+
+// 添加书签
+const addBookmark = async () => {
+  if (!newBookmark.value.name.trim() || !newBookmark.value.url.trim()) {
+    errorAlert.value = {
+      show: true,
+      message: '书签名称和网址不能为空'
+    }
+    setTimeout(() => {
+      errorAlert.value.show = false
+    }, 3000)
+    return
+  }
+
+  try {
+    const response = await SinanApiService.addBookmark({
+      name: newBookmark.value.name.trim(),
+      url: newBookmark.value.url.trim(),
+      description: newBookmark.value.description.trim() || undefined,
+      namespaceId: newBookmark.value.namespaceId || undefined
+    })
+
+    if (response.code === 0) {
+      console.log('书签添加成功:', response.data)
+      closeAddBookmarkDialog()
+      // 刷新书签列表
+      await loadMostVisitedBookmarks(false)
+    } else {
+      errorAlert.value = {
+        show: true,
+        message: `添加书签失败: ${response.message}`
+      }
+      setTimeout(() => {
+        errorAlert.value.show = false
+      }, 3000)
+    }
+  } catch (error) {
+    console.error('添加书签失败:', error)
+    errorAlert.value = {
+      show: true,
+      message: `添加书签失败: ${error instanceof Error ? error.message : String(error)}`
+    }
+    setTimeout(() => {
+      errorAlert.value.show = false
+    }, 3000)
+  }
+}
+
+
 // 默认图标 - 使用扩展的图标
 const DEFAULT_ICON = '/icon48.png'
 
@@ -512,6 +729,13 @@ watch(searchQuery, (newQuery) => {
             <polyline points="9,22 9,12 15,12 15,22" />
           </svg>
         </Button>
+        <!-- 新增书签按钮 -->
+        <Button variant="outline" size="icon" @click="openAddBookmarkDialog" class="h-10 w-10">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </Button>
         <!-- 暗黑模式切换按钮 -->
         <Button variant="outline" size="icon" @click="toggleDarkMode" class="h-10 w-10">
           <!-- 太阳图标（浅色模式） -->
@@ -604,6 +828,84 @@ watch(searchQuery, (newQuery) => {
       </svg>
       <p class="text-lg mb-2">暂无常用书签</p>
       <p class="text-sm">开始使用书签后，这里会显示您最常访问的内容</p>
+    </div>
+
+    <!-- 新增书签对话框 -->
+    <div v-if="showAddBookmarkDialog" class="fixed inset-0 z-50 flex items-center justify-center">
+      <!-- 背景遮罩 -->
+      <div class="fixed inset-0 backdrop-blur-sm bg-black/20" @click="closeAddBookmarkDialog"></div>
+      
+      <!-- 对话框内容 -->
+      <div class="relative bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">添加新书签</h2>
+          <Button variant="ghost" size="icon" @click="closeAddBookmarkDialog" class="h-6 w-6">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </Button>
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label class="text-sm font-medium mb-1 block">网址 *</label>
+            <Input 
+              v-model="newBookmark.url" 
+              placeholder="https://example.com" 
+              class="w-full"
+              @blur="fetchTitleFromUrl"
+            />
+          </div>
+          
+          <div>
+            <label class="text-sm font-medium mb-1 block">书签名称 *</label>
+            <Input 
+              v-model="newBookmark.name" 
+              placeholder="输入书签名称" 
+              class="w-full"
+            />
+          </div>
+          
+          <div>
+            <label class="text-sm font-medium mb-1 block">描述</label>
+            <Textarea 
+              v-model="newBookmark.description" 
+              placeholder="输入描述（可选）" 
+              class="w-full resize-none max-h-[4.5rem] overflow-y-auto"
+              rows="3"
+            />
+          </div>
+          
+          <div>
+            <label class="text-sm font-medium mb-1 block">选择空间</label>
+            <Select v-model="newBookmark.namespaceId">
+              <SelectTrigger class="w-full">
+                <SelectValue placeholder="选择一个空间" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem 
+                  v-for="namespace in namespaces" 
+                  :key="namespace.id" 
+                  :value="namespace.id"
+                >
+                  {{ namespace.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        
+        <!-- 按钮区域 -->
+        <div class="flex justify-end gap-2 mt-6">
+          <Button variant="outline" @click="closeAddBookmarkDialog">
+            取消
+          </Button>
+          <Button @click="addBookmark">
+            添加书签
+          </Button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
