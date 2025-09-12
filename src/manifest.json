@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Sinan书签管理器",
-  "version": "0.1.1",
+  "version": "1.2.0",
   "description": "一个强大的 Chrome 书签同步与管理扩展，让您在任何设备上都能快速访问您的书签收藏。通过智能推荐和优雅的界面设计，让书签管理变得简单高效。",
   "action": {
     "default_popup": "src/popup/index.html",
@@ -18,14 +18,23 @@
     "service_worker": "background/service-worker.js",
     "type": "module"
   },
-  "permissions": ["storage", "tabs", "bookmarks", "alarms", "scripting", "activeTab"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "bookmarks",
+    "alarms",
+    "scripting",
+    "activeTab"
+  ],
   "omnibox": {
     "keyword": "bm"
   },
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "icons": {
-      "16": "icon16.png",
-      "48": "icon48.png",
-      "128": "icon128.png"
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   }
 }
