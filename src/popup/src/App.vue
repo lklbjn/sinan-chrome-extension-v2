@@ -228,12 +228,19 @@ const handleSync = async () => {
 }
 
 const handleOpenSinan = () => {
-  const url = 'https://sinan.host'
-  if (typeof chrome !== 'undefined' && chrome.tabs) {
-    chrome.tabs.create({ url })
-  } else {
-    // Fallback for development
-    window.open(url, '_blank')
+  const rawUrl = formValues.value.serverUrl || 'https://sinan.host';
+  try {
+    const urlObj = new URL(rawUrl);
+    const url = `${urlObj.protocol}//${urlObj.hostname}`;
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.create({ url })
+    } else {
+      // Fallback for development
+      window.open(url, '_blank')
+    }
+  } catch (e) {
+    // 如果 rawUrl 不是合法的URL，可以做相应处理
+    console.error('无效的URL:', rawUrl);
   }
 }
 
