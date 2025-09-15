@@ -8,9 +8,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { onMounted, ref, computed, watch } from 'vue'
 import { SinanApiService } from '../../shared/services/api'
 import { IconService } from '../../shared/services/icon'
+import { StorageService } from '../../shared/services/storage'
 import { IconCacheService } from '../../shared/services/iconCache'
 import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
 import type { BookmarkResp, SnSpace } from '../../shared/types/api'
+const originalConfig = ref<any>({})
+// 表单状态持久化
+const formValues = ref({
+  serverUrl: 'https://sinan.host',
+  apiKey: '',
+  autoSync: false,
+  syncInterval: '30',
+  iconSource: 'google-s2' as 'google-s2' | 'sinan',
+})
 
 const bookmarks = ref<BookmarkResp[]>([])
 const searchQuery = ref('')
@@ -316,11 +326,18 @@ const handleRefresh = async () => {
 }
 
 const openSinanHomepage = () => {
-  const sinanUrl = 'https://sinan.host'
-  if (typeof chrome !== 'undefined' && chrome.tabs) {
-    chrome.tabs.create({ url: sinanUrl, active: true })
-  } else {
-    window.open(sinanUrl, '_blank')
+  const rawUrl = formValues.value.serverUrl || 'https://sinan.host';
+  try {
+    const urlObj = new URL(rawUrl);
+    const sinanUrl = `${urlObj.protocol}//${urlObj.hostname}`;
+    if (typeof chrome !== 'undefined' && chrome.tabs) {
+      chrome.tabs.create({ url: sinanUrl, active: true })
+    } else {
+      window.open(sinanUrl, '_blank')
+    }
+  } catch (e) {
+    // 如果 rawUrl 不是合法的URL，可以做相应处理
+    console.error('无效的URL:', rawUrl);
   }
 }
 
@@ -644,6 +661,18 @@ const toggleDarkMode = () => {
 }
 
 onMounted(async () => {
+  const config = await StorageService.getConfig()
+  originalConfig.value = { ...config }
+  
+  // 更新持久化表单值
+  formValues.value = {
+    serverUrl: config.serverUrl,
+    apiKey: config.apiKey,
+    autoSync: config.autoSync,
+    syncInterval: config.syncInterval,
+    iconSource: config.iconSource,
+  }
+
   // 从本地存储读取暗黑模式设置
   const savedDarkMode = localStorage.getItem('darkMode')
   if (savedDarkMode === 'true') {
