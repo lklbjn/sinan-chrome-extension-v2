@@ -12,6 +12,7 @@ import { StorageService } from '../../shared/services/storage'
 import { IconCacheService } from '../../shared/services/iconCache'
 import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
 import type { BookmarkResp, SnSpace } from '../../shared/types/api'
+import { useFavicon } from '@/utils/useFavicon'
 const originalConfig = ref<any>({})
 // 表单状态持久化
 const formValues = ref({
@@ -602,6 +603,26 @@ const closeBackgroundSettings = () => {
   showBackgroundSettings.value = false
 }
 
+// 使用favicon组合式函数
+const { getFaviconUrl } = useFavicon()
+
+// 处理favicon加载错误
+const onFaviconError = (event: Event, url: string) => {
+  const img = event.target as HTMLImageElement
+  const currentSrc = img.src
+  
+  // 如果当前使用的是Google服务
+  if (currentSrc.includes('google.com/s2/favicons')) {
+    console.log(`Google favicon failed for ${url}, trying Sinan API`)
+    // 切换到Sinan API
+    img.src = `/api/favicon/icon?domain=${encodeURIComponent(new URL(url).hostname)}&sz=32`
+  } else {
+    // 如果Sinan API也失败了，使用默认图标
+    console.log(`Sinan API also failed for ${url}, using default icon`)
+    img.src = '/icon48.png'
+  }
+}
+
 // 添加书签
 const addBookmark = async () => {
   if (!newBookmark.value.name.trim() || !newBookmark.value.url.trim()) {
@@ -685,10 +706,22 @@ const loadFaviconAsync = async (url: string) => {
   }
 }
 
-// 获取缓存的图标URL，如果没有缓存则返回默认图标
-const getCachedFavicon = (url: string): string => {
-  return faviconCache.value.get(url) || DEFAULT_ICON
+// 判断图标是否为base64格式
+// 判断是否为有效的图标（HTTP URL 或 base64）
+const isValidIcon = (icon: number | string): boolean => {
+  console.log('实际链接为：', icon)
+  if (typeof icon !== 'string') return false
+  // 检查是否为 HTTP/HTTPS URL
+  if (icon.startsWith('http://') || icon.startsWith('https://')) return true
+  // 检查是否为 base64 图片
+  if (icon.startsWith('data:image/')) return true
+  return false
 }
+
+// 获取缓存的图标URL，如果没有缓存则返回默认图标
+// const getCachedFavicon = (url: string): string => {
+//   return faviconCache.value.get(url) || DEFAULT_ICON
+// }
 
 // 检查图标是否正在加载
 const isFaviconLoading = (url: string): boolean => {
@@ -971,12 +1004,35 @@ watch(searchQuery, (newQuery) => {
               class="w-8 h-8 rounded" 
               @vue:mounted="ensureFaviconLoading(bookmark.url)"
             />
-            <img 
+            <!-- <img 
               v-else
               :src="getCachedFavicon(bookmark.url)" 
               :alt="bookmark.name" 
               class="w-8 h-8 rounded"
               @error="($event.target as HTMLImageElement).style.display = 'none'" 
+            /> -->
+            <!-- 优先使用存储的图标（HTTP URL 或 base64） -->
+            <img
+                v-if="isValidIcon(bookmark.icon)"
+                :src="String(bookmark.icon)"
+                :alt="bookmark.name"
+                class="h-full w-full object-cover"
+                @error="(e) => (e.target as HTMLImageElement).src = '/icon48.png'"
+            />
+            <!-- 其次使用Google Favicon服务，失败时降级到Sinan API -->
+            <img
+                v-else-if="getFaviconUrl(bookmark.url)"
+                :src="getFaviconUrl(bookmark.url)"
+                :alt="bookmark.name"
+                class="h-full w-full object-cover"
+                @error="(e) => onFaviconError(e, bookmark.url)"
+            />
+            <!-- 默认使用项目Logo -->
+            <img
+                v-else
+                src="/icon48.png"
+                :alt="bookmark.name"
+                class="h-full w-full object-cover"
             />
           </div>
           <div class="flex-1 min-w-0 overflow-hidden">
