@@ -36,6 +36,18 @@ const errorAlert = ref<{ show: boolean; message: string }>({
 // 暗黑模式状态
 const isDarkMode = ref(false)
 
+// 背景图片配置状态
+const showBackgroundSettings = ref(false)
+const backgroundConfig = ref({
+  mode: 'bing' as 'bing' | 'custom',
+  customUrls: [] as string[],
+  currentCustomUrl: '',
+  opacity: 0.7 // 默认透明度70%
+})
+
+// 当前背景图片URL
+const backgroundImageUrl = ref('')
+
 // 新增书签对话框状态
 const showAddBookmarkDialog = ref(false)
 const newBookmark = ref({
@@ -495,6 +507,101 @@ const loadNamespaces = async () => {
   }
 }
 
+// 获取Bing每日一图
+const getBingWallpaper = async (): Promise<string> => {
+  try {
+    // 使用Bing壁纸API
+    const response = await fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN')
+    const data = await response.json()
+    const imageUrl = `https://www.bing.com${data.images[0].url}`
+    return imageUrl
+  } catch (error) {
+    console.error('获取Bing壁纸失败:', error)
+    // 返回默认的Bing壁纸URL
+    return 'https://www.bing.com/th?id=OHR.BlueJays_ZH-CN0010006677_1920x1080.jpg'
+  }
+}
+
+// 随机选择自定义图片
+const getRandomCustomImage = (): string => {
+  const urls = backgroundConfig.value.customUrls.filter(url => url.trim())
+  if (urls.length === 0) {
+    return ''
+  }
+  const randomIndex = Math.floor(Math.random() * urls.length)
+  return urls[randomIndex]
+}
+
+// 设置背景图片
+const setBackgroundImage = async () => {
+  try {
+    if (backgroundConfig.value.mode === 'bing') {
+      backgroundImageUrl.value = await getBingWallpaper()
+    } else {
+      backgroundImageUrl.value = getRandomCustomImage()
+    }
+    
+    // 保存当前配置到本地存储
+    saveBackgroundConfig()
+  } catch (error) {
+    console.error('设置背景图片失败:', error)
+  }
+}
+
+// 保存背景配置到本地存储
+const saveBackgroundConfig = () => {
+  localStorage.setItem('backgroundConfig', JSON.stringify(backgroundConfig.value))
+}
+
+// 从本地存储加载背景配置
+const loadBackgroundConfig = () => {
+  const savedConfig = localStorage.getItem('backgroundConfig')
+  if (savedConfig) {
+    try {
+      backgroundConfig.value = JSON.parse(savedConfig)
+    } catch (error) {
+      console.error('解析背景配置失败:', error)
+    }
+  }
+}
+
+// 添加自定义图片URL
+const addCustomUrl = () => {
+  const url = backgroundConfig.value.currentCustomUrl.trim()
+  if (url && !backgroundConfig.value.customUrls.includes(url)) {
+    backgroundConfig.value.customUrls.push(url)
+    backgroundConfig.value.currentCustomUrl = ''
+    saveBackgroundConfig()
+  }
+}
+
+// 移除自定义图片URL
+const removeCustomUrl = (index: number) => {
+  backgroundConfig.value.customUrls.splice(index, 1)
+  saveBackgroundConfig()
+}
+
+// 更新透明度
+const updateOpacity = () => {
+  saveBackgroundConfig()
+}
+
+// 应用背景配置
+const applyBackgroundConfig = async () => {
+  await setBackgroundImage()
+  closeBackgroundSettings()
+}
+
+// 打开背景设置面板
+const openBackgroundSettings = () => {
+  showBackgroundSettings.value = true
+}
+
+// 关闭背景设置面板
+const closeBackgroundSettings = () => {
+  showBackgroundSettings.value = false
+}
+
 // 添加书签
 const addBookmark = async () => {
   if (!newBookmark.value.name.trim() || !newBookmark.value.url.trim()) {
@@ -664,6 +771,11 @@ onMounted(async () => {
   const config = await StorageService.getConfig()
   originalConfig.value = { ...config }
   
+  // 加载背景配置
+  loadBackgroundConfig()
+  // 设置背景图片
+  await setBackgroundImage()
+  
   // 更新持久化表单值
   formValues.value = {
     serverUrl: config.serverUrl,
@@ -742,7 +854,25 @@ watch(searchQuery, (newQuery) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background text-foreground p-8">
+  <div 
+    class="min-h-screen bg-background text-foreground p-8 relative"
+    :style="{
+      backgroundImage: backgroundImageUrl ? `url('${backgroundImageUrl}')` : 'none',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+      backgroundAttachment: 'fixed'
+    }"
+  >
+    <!-- 背景遮罩层，提高文字可读性 -->
+    <div 
+      class="absolute inset-0 backdrop-blur-sm" 
+      v-if="backgroundImageUrl"
+      :style="{ opacity: backgroundConfig.opacity, backgroundColor: 'var(--background)' }"
+    ></div>
+    
+    <!-- 内容容器 -->
+    <div class="relative z-10">
     <!-- 顶部区域 -->
     <div class="flex items-center justify-between mb-8">
       <div>
@@ -789,6 +919,14 @@ watch(searchQuery, (newQuery) => {
           <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
           <path d="M3 21v-5h5" />
         </svg>
+        </Button>
+        <!-- 背景设置按钮 -->
+        <Button variant="outline" size="icon" @click="openBackgroundSettings" class="h-10 w-10">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
         </Button>
       </div>
     </div>
@@ -857,6 +995,123 @@ watch(searchQuery, (newQuery) => {
       </svg>
       <p class="text-lg mb-2">暂无常用书签</p>
       <p class="text-sm">开始使用书签后，这里会显示您最常访问的内容</p>
+    </div>
+    </div> <!-- 关闭相对定位的内容容器 -->
+
+    <!-- 背景设置面板 -->
+    <div v-if="showBackgroundSettings" class="fixed inset-0 z-50 flex items-center justify-center">
+      <!-- 背景遮罩 -->
+      <div class="fixed inset-0 backdrop-blur-sm bg-black/20" @click="closeBackgroundSettings"></div>
+      
+      <!-- 对话框内容 -->
+      <div class="relative bg-background border rounded-lg shadow-lg w-full max-w-md mx-4 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">背景图片设置</h2>
+          <Button variant="ghost" size="icon" @click="closeBackgroundSettings" class="h-6 w-6">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </Button>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- 模式选择 -->
+          <div>
+            <label class="text-sm font-medium mb-2 block">背景图片模式</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  v-model="backgroundConfig.mode" 
+                  value="bing" 
+                  class="w-4 h-4 text-primary"
+                >
+                <span>Bing每日一图</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  v-model="backgroundConfig.mode" 
+                  value="custom" 
+                  class="w-4 h-4 text-primary"
+                >
+                <span>自定义图片</span>
+              </label>
+            </div>
+          </div>
+          
+          <!-- 自定义图片设置 -->
+          <div v-if="backgroundConfig.mode === 'custom'">
+            <label class="text-sm font-medium mb-2 block">自定义图片URL</label>
+            <div class="flex gap-2">
+              <Input 
+                v-model="backgroundConfig.currentCustomUrl" 
+                placeholder="输入图片URL" 
+                class="flex-1"
+                @keypress.enter="addCustomUrl"
+              />
+              <Button @click="addCustomUrl" :disabled="!backgroundConfig.currentCustomUrl.trim()">
+                添加
+              </Button>
+            </div>
+            
+            <!-- 图片URL列表 -->
+            <div v-if="backgroundConfig.customUrls.length > 0" class="mt-3 space-y-2">
+              <div 
+                v-for="(url, index) in backgroundConfig.customUrls" 
+                :key="index"
+                class="flex items-center justify-between p-2 bg-muted rounded text-sm"
+              >
+                <span class="truncate flex-1 mr-2">{{ url }}</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  @click="removeCustomUrl(index)"
+                  class="h-6 w-6 p-0"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 透明度设置 -->
+          <div>
+            <label class="text-sm font-medium mb-2 block">背景图片透明度</label>
+            <div class="flex items-center gap-3">
+              <input 
+                type="range" 
+                v-model="backgroundConfig.opacity" 
+                min="0" 
+                max="1" 
+                step="0.1"
+                class="flex-1 h-2 bg-muted rounded-full appearance-none cursor-pointer"
+                @input="updateOpacity"
+              >
+              <span class="text-sm text-muted-foreground min-w-[40px] text-right">
+                {{ Math.round(backgroundConfig.opacity * 100) }}%
+              </span>
+            </div>
+            <div class="text-xs text-muted-foreground mt-1">
+              0% 完全透明 - 100% 完全不透明
+            </div>
+          </div>
+        </div>
+        
+        <!-- 按钮区域 -->
+        <div class="flex justify-end gap-2 mt-6">
+          <Button variant="outline" @click="closeBackgroundSettings">
+            取消
+          </Button>
+          <Button @click="applyBackgroundConfig">
+            应用
+          </Button>
+        </div>
+      </div>
     </div>
 
     <!-- 新增书签对话框 -->

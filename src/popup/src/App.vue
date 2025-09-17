@@ -576,7 +576,6 @@ const toggleDarkMode = () => {
                 v-model="currentTab.url" 
                 placeholder="https://example.com" 
                 class="w-full text-xs"
-                readonly
               />
             </div>
             
