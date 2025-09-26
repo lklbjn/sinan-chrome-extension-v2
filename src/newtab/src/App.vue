@@ -16,6 +16,154 @@ import type { BookmarkResp, SnSpace } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
 const searchQuery = ref('')
+
+// 默认搜索引擎书签
+const defaultSearchEngines = ref<BookmarkResp[]>([
+  {
+    id: 'search-baidu',
+    namespaceId: 'default',
+    name: '{query} For Baidu',
+    description: '百度一下，你就知道',
+    url: 'https://www.baidu.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://www.baidu.com/s?wd={query}'  // 使用占位符
+  },
+  {
+    id: 'search-google',
+    namespaceId: 'default',
+    name: '{query} For Google',
+    description: 'Google 搜索引擎',
+    url: 'https://www.google.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://www.google.com/search?q={query}'
+  },
+  {
+    id: 'search-bing',
+    namespaceId: 'default',
+    name: '{query} For Bing',
+    description: 'Microsoft Bing 搜索引擎',
+    url: 'https://www.bing.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://www.bing.com/search?q={query}'
+  },
+  {
+    id: 'search-github',
+    namespaceId: 'default',
+    name: '{query} For GitHub',
+    description: '在GitHub上搜索代码和项目',
+    url: 'https://github.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://github.com/search?q={query}'
+  },
+  {
+    id: 'search-stackoverflow',
+    namespaceId: 'default',
+    name: '{query} For Stack Overflow',
+    description: '程序员问答社区',
+    url: 'https://stackoverflow.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://stackoverflow.com/search?q={query}'
+  },
+  {
+    id: 'search-bilibili',
+    namespaceId: 'default',
+    name: '{query} For Bilibili',
+    description: '在哔哩哔哩搜索视频',
+    url: 'https://search.bilibili.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://search.bilibili.com/all?keyword={query}'
+  },
+  {
+    id: 'search-dockerhub',
+    namespaceId: 'default',
+    name: '{query} For Docker Hub',
+    description: '搜索Docker镜像',
+    url: 'https://hub.docker.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://hub.docker.com/search?q={query}&type=image'
+  },
+  {
+    id: 'search-taobao',
+    namespaceId: 'default',
+    name: '{query} For Taobao',
+    description: '在淘宝搜索商品',
+    url: 'https://www.taobao.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://s.taobao.com/search?q={query}'
+  },
+  {
+    id: 'search-steam',
+    namespaceId: 'default',
+    name: '{query} For Steam',
+    description: '在Steam搜索游戏',
+    url: 'https://store.steampowered.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://store.steampowered.com/search/?snr=1_4_4__12&term={query}'
+  },
+  {
+    id: 'search-unsplash',
+    namespaceId: 'default',
+    name: '{query} For Unsplash',
+    description: '搜索高质量免费图片',
+    url: 'https://unsplash.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://unsplash.com/s/photos/{query}'
+  },
+  {
+    id: 'search-youtube',
+    namespaceId: 'default',
+    name: '{query} For YouTube',
+    description: '在YouTube搜索视频',
+    url: 'https://www.youtube.com',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://www.youtube.com/results?search_query={query}'
+  },
+  {
+    id: 'search-wikipedia',
+    namespaceId: 'default',
+    name: '{query} For Wikipedia',
+    description: '在维基百科搜索条目',
+    url: 'https://zh.wikipedia.org',
+    icon: '',
+    num: 0,
+    star: false,
+    tags: [],
+    searchUrl: 'https://zh.wikipedia.org/wiki/{query}'
+  }
+] as (BookmarkResp & { searchUrl: string })[])
 const isLoading = ref(true)
 const isRefreshing = ref(false)
 const isSearching = ref(false)
@@ -245,9 +393,35 @@ const debouncedSearch = (query: string) => {
 }
 
 const filteredBookmarks = computed(() => {
-  // 现在直接返回从 API 获取的书签数据
-  return bookmarks.value
+  // 如果有搜索查询
+  if (searchQuery.value.trim()) {
+    // 如果搜索有结果，只返回搜索结果
+    if (bookmarks.value.length > 0) {
+      return bookmarks.value
+    } else {
+      // 如果搜索无结果，显示搜索引擎（让用户可以用关键词搜索）
+      return defaultSearchEngines.value
+    }
+  }
+
+  // 如果没有搜索查询，合并书签和搜索引擎
+  // 如果没有书签，只显示搜索引擎；如果有书签，显示书签 + 搜索引擎
+  if (bookmarks.value.length === 0) {
+    // 无书签时，只显示搜索引擎
+    return defaultSearchEngines.value
+  } else {
+    // 有书签时，书签 + 搜索引擎一起显示
+    return [...bookmarks.value, ...defaultSearchEngines.value]
+  }
 })
+
+// 获取显示名称，替换 {query} 为实际搜索内容
+const getDisplayName = (bookmark: BookmarkResp) => {
+  if (searchQuery.value.trim() && bookmark.name.includes('{query}')) {
+    return bookmark.name.replace('{query}', searchQuery.value.trim())
+  }
+  return bookmark.name
+}
 
 // 从缓存加载书签
 const loadBookmarksFromCache = async (limit: number) => {
@@ -346,41 +520,54 @@ const handleBookmarkClick = async (bookmark: BookmarkResp, event: MouseEvent) =>
     bookmark: bookmark.name
   })
 
-  try {
-    // 调用increment-usage接口
-    const response = await SinanApiService.incrementBookmarkUsage(bookmark.id)
+  // 检查是否是搜索引擎书签
+  const searchEngine = bookmark as BookmarkResp & { searchUrl?: string }
+  let targetUrl = bookmark.url
 
-    if (response.code === 0) {
-      console.log('书签使用次数已增加:', bookmark.name)
-    } else if (response.code === -1) {
-      console.error('增加使用次数API错误:', response.message)
-      errorAlert.value = {
-        show: true,
-        message: `更新使用次数失败: ${response.message}`
+  // 如果是搜索引擎且有搜索查询，构造搜索URL
+  if (searchEngine.searchUrl && searchQuery.value.trim()) {
+    targetUrl = searchEngine.searchUrl.replace('{query}', encodeURIComponent(searchQuery.value.trim()))
+    console.log('使用搜索URL:', targetUrl)
+  }
+
+  // 只有非搜索引擎书签才调用API
+  if (!bookmark.id.startsWith('search-')) {
+    try {
+      // 调用increment-usage接口
+      const response = await SinanApiService.incrementBookmarkUsage(bookmark.id)
+
+      if (response.code === 0) {
+        console.log('书签使用次数已增加:', bookmark.name)
+      } else if (response.code === -1) {
+        console.error('增加使用次数API错误:', response.message)
+        errorAlert.value = {
+          show: true,
+          message: `更新使用次数失败: ${response.message}`
+        }
+        // 3秒后自动隐藏错误提示
+        setTimeout(() => {
+          errorAlert.value.show = false
+        }, 3000)
       }
-      // 3秒后自动隐藏错误提示
-      setTimeout(() => {
-        errorAlert.value.show = false
-      }, 3000)
+    } catch (error) {
+      console.error('增加书签使用次数失败:', error)
     }
-  } catch (error) {
-    console.error('增加书签使用次数失败:', error)
   }
 
   // 根据点击方式打开书签
   if (event.button === 1 || event.ctrlKey || event.metaKey) {
     // 鼠标中键、Ctrl+点击、Cmd+点击：在新标签页打开但不跳转
-    console.log('在后台标签页打开书签:', bookmark.url)
+    console.log('在后台标签页打开书签:', targetUrl)
     if (typeof chrome !== 'undefined' && chrome.tabs) {
-      chrome.tabs.create({ url: bookmark.url, active: false })
+      chrome.tabs.create({ url: targetUrl, active: false })
     } else {
       // 开发环境fallback
-      window.open(bookmark.url, '_blank')
+      window.open(targetUrl, '_blank')
     }
   } else {
     // 鼠标左键：在当前标签页打开
-    console.log('在当前标签页打开书签:', bookmark.url)
-    window.location.href = bookmark.url
+    console.log('在当前标签页打开书签:', targetUrl)
+    window.location.href = targetUrl
   }
 }
 
@@ -824,6 +1011,24 @@ onMounted(async () => {
   }
 })
 
+// 处理搜索框回车事件
+const handleSearchEnter = () => {
+  const query = searchQuery.value.trim()
+  if (!query) return
+
+  // 如果有书签搜索结果，选中第一个书签
+  if (bookmarks.value.length > 0) {
+    const firstBookmark = bookmarks.value[0]
+    window.location.href = firstBookmark.url
+    return
+  }
+
+  // 如果没有书签搜索结果，使用默认搜索引擎（百度）搜索
+  const searchUrl = 'https://www.baidu.com/s?wd={query}'.replace('{query}', encodeURIComponent(query))
+  console.log('搜索框回车，使用百度搜索:', searchUrl)
+  window.location.href = searchUrl
+}
+
 // 监听搜索输入变化
 watch(searchQuery, (newQuery) => {
   debouncedSearch(newQuery)
@@ -889,7 +1094,7 @@ watch(searchQuery, (newQuery) => {
 
     <!-- 搜索框 -->
     <div class="mb-8 max-w-md mx-auto relative">
-      <Input v-model="searchQuery" placeholder="搜索书签名称、网址、描述或标签..." class="w-full" />
+      <Input v-model="searchQuery" placeholder="搜索书签名称、网址、描述或标签..." class="w-full" @keyup.enter="handleSearchEnter" />
       <div v-if="isSearching" class="absolute right-3 top-1/2 transform -translate-y-1/2">
         <svg class="animate-spin h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -936,7 +1141,7 @@ watch(searchQuery, (newQuery) => {
             />
           </div>
           <div class="flex-1 min-w-0 overflow-hidden">
-            <p class="text-sm font-medium truncate max-w-full">{{ bookmark.name }}</p>
+            <p class="text-sm font-medium truncate max-w-full">{{ getDisplayName(bookmark) }}</p>
             <p class="text-xs text-muted-foreground truncate max-w-full">{{ bookmark.url }}</p>
           </div>
         </div>
