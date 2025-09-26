@@ -95,6 +95,10 @@ const formValues = ref({
   newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
   newtabBlurEnabled: false,
   newtabBlurIntensity: 10,
+
+  // 欢迎词配置
+  welcomeTitle: 'Welcome to Sinan',
+  welcomeSubtitle: "Let's hurry to our destination.",
 })
 
 
@@ -110,7 +114,9 @@ const hasChanges = computed(() => {
     formValues.value.newtabBackgroundImage !== originalConfig.value.newtabBackgroundImage ||
     formValues.value.newtabBackgroundBingUrl !== originalConfig.value.newtabBackgroundBingUrl ||
     formValues.value.newtabBlurIntensity !== originalConfig.value.newtabBlurIntensity ||
-    JSON.stringify(formValues.value.newtabBackgroundUrls) !== JSON.stringify(originalConfig.value.newtabBackgroundUrls)
+    JSON.stringify(formValues.value.newtabBackgroundUrls) !== JSON.stringify(originalConfig.value.newtabBackgroundUrls) ||
+    formValues.value.welcomeTitle !== originalConfig.value.welcomeTitle ||
+    formValues.value.welcomeSubtitle !== originalConfig.value.welcomeSubtitle
   )
 })
 
@@ -174,6 +180,10 @@ onMounted(async () => {
       newtabBackgroundBingUrl: config.newtabBackgroundBingUrl || 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
       newtabBlurEnabled: config.newtabBlurEnabled,
       newtabBlurIntensity: config.newtabBlurIntensity,
+
+      // 欢迎词配置
+      welcomeTitle: config.welcomeTitle || 'Welcome to Sinan',
+      welcomeSubtitle: config.welcomeSubtitle || "Let's hurry to our destination.",
     }
 
     lastSyncTime.value = config.lastSyncTime
@@ -253,6 +263,10 @@ const onSubmit = async () => {
       newtabBackgroundUrls: formValues.value.newtabBackgroundUrls || '[]',
       newtabBlurEnabled: formValues.value.newtabBlurIntensity > 0,
       newtabBlurIntensity: formValues.value.newtabBlurIntensity,
+
+      // 欢迎词配置
+      welcomeTitle: formValues.value.welcomeTitle,
+      welcomeSubtitle: formValues.value.welcomeSubtitle,
     })
     
     // 更新 API 实例以使用新的配置
@@ -304,6 +318,10 @@ const handleRestoreDefault = () => {
     newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
     newtabBlurEnabled: false,
     newtabBlurIntensity: 10,
+
+    // 欢迎词默认配置
+    welcomeTitle: 'Welcome to Sinan',
+    welcomeSubtitle: "Let's hurry to our destination.",
   }
 }
 
@@ -765,24 +783,24 @@ const previewBingImage = async () => {
           <div class="flex flex-col gap-4">
             <Button class="w-full" variant="default" @click="handleOpenSinan">打开Sinan主页</Button>
             <div class="flex gap-2">
-              <Button 
-                class="flex-1" 
-                variant="outline" 
+              <Button
+                class="flex-1"
+                variant="outline"
                 @click="handleSync"
                 :disabled="isSyncing || isLoading || isDeleting"
               >
                 {{ syncButtonText }}
               </Button>
-              <Button 
-                class="flex-1" 
-                variant="destructive" 
+              <Button
+                class="flex-1"
+                variant="destructive"
                 @click="handleDeleteBookmarks"
                 :disabled="isDeleting || isLoading || isSyncing"
               >
                 {{ deleteButtonText }}
               </Button>
             </div>
-            
+
             <!-- 同步状态提示 -->
             <Alert v-if="syncAlert.show" :variant="syncAlert.type === 'error' ? 'destructive' : 'default'">
               <AlertDescription>
@@ -792,6 +810,172 @@ const previewBingImage = async () => {
           </div>
 
           <div class="border-b border-border" />
+
+          <!-- 欢迎词配置 -->
+          <div class="space-y-4">
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">欢迎词标题</label>
+              <Input
+                v-model="formValues.welcomeTitle"
+                placeholder="请输入欢迎词标题"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">欢迎词内容</label>
+              <Input
+                v-model="formValues.welcomeSubtitle"
+                placeholder="请输入欢迎词内容"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+
+          <div class="border-b border-border" />
+
+          <!-- 来源设置 -->
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Newtab背景来源选择 -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景来源</label>
+                <Select
+                  v-model="formValues.newtabBackgroundSource"
+                >
+                  <SelectTrigger class="w-full">
+                    <SelectValue placeholder="选择背景来源" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blank">空</SelectItem>
+                    <SelectItem value="local">本地图片</SelectItem>
+                    <SelectItem value="urls">多个URL随机</SelectItem>
+                    <SelectItem value="bing">Bing每日一图</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <!-- 图标来源设置 -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">图标来源</label>
+                <Select
+                  v-model="formValues.iconSource"
+                >
+                  <SelectTrigger class="w-full">
+                    <SelectValue placeholder="选择图标来源" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="google-s2">Google S2</SelectItem>
+                    <SelectItem value="sinan">Sinan服务</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <!-- Newtab背景详细设置 -->
+            <div class="space-y-4">
+              <!-- 本地图片上传 -->
+              <div v-if="formValues.newtabBackgroundSource === 'local'" class="space-y-2">
+                <ImageUpload
+                  v-model="formValues.newtabBackgroundImage"
+                  label="上传背景图片"
+                />
+              </div>
+
+              <!-- 多个URL输入 -->
+              <div v-if="formValues.newtabBackgroundSource === 'urls'" class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景图片URLs</label>
+                <Textarea
+                  v-model="urlTextarea"
+                  placeholder="每行输入一个图片URL，支持jpg、png、gif、webp格式&#10;例如：&#10;https://example.com/image1.jpg&#10;https://example.com/image2.png&#10;https://unsplash.com/photo/xxx"
+                  class="w-full resize-none min-h-[8rem] max-h-[12rem] overflow-y-auto"
+                  rows="6"
+                />
+                <div class="text-xs text-muted-foreground">
+                  有效URL数量: {{ validUrlCount }} / 总数: {{ totalUrlCount }}
+                </div>
+              </div>
+
+              <!-- Bing图片预览 -->
+              <div v-if="formValues.newtabBackgroundSource === 'bing'" class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Bing每日一图预览</label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  @click="previewBingImage"
+                  :disabled="isLoadingBingImage"
+                  class="w-full"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  {{ isLoadingBingImage ? '加载中...' : '预览今日Bing图片' }}
+                </Button>
+
+                <!-- Bing图片预览区域 -->
+                <div v-if="bingImageUrl" class="relative">
+                  <img
+                    :src="bingImageUrl"
+                    alt="Bing每日一图预览"
+                    class="w-full h-32 object-cover rounded-md border border-border"
+                  />
+                  <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                    Bing每日一图
+                  </div>
+                </div>
+              </div>
+
+              <!-- 毛玻璃效果设置 -->
+              <div v-if="formValues.newtabBackgroundSource !== 'blank'" class="space-y-2">
+                <BlurSlider
+                  v-model="formValues.newtabBlurIntensity"
+                  label="毛玻璃力度"
+                  :min="0"
+                  :max="20"
+                  :step="1"
+                />
+              </div>
+            </div>
+
+                        <div class="space-y-2">
+              <div class="flex gap-2">
+                <Button 
+                  type="button" 
+                  class="flex-1" 
+                  :variant="hasChanges ? 'destructive' : 'default'"
+                  @click="onSubmit" 
+                  :disabled="isLoading || !hasChanges || isSaving"
+                >
+                  {{ saveButtonText }}
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  @click="handleReset" 
+                  :disabled="isLoading || !hasChanges || isSaving"
+                  class="px-3"
+                >
+                  重置
+                </Button>
+              </div>
+              
+              <Button 
+                type="button" 
+                variant="secondary" 
+                @click="handleRestoreDefault" 
+                :disabled="isLoading || isSaving"
+                class="w-full"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+                  <path d="M3 21v-5h5" />
+                </svg>
+                恢复默认配置
+              </Button>
+            </div>
 
           <!-- 最后同步时间 -->
           <div class="text-xs text-muted-foreground text-center">最后同步时间：{{ lastSyncText }}</div>
@@ -931,115 +1115,12 @@ const previewBingImage = async () => {
               />
             </div>
 
-            <!-- 来源设置 -->
-            <div class="grid grid-cols-2 gap-4">
-              <!-- Newtab背景来源选择 -->
-              <div class="space-y-2">
-                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景来源</label>
-                <Select
-                  v-model="formValues.newtabBackgroundSource"
-                >
-                  <SelectTrigger class="w-full">
-                    <SelectValue placeholder="选择背景来源" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="blank">空</SelectItem>
-                    <SelectItem value="local">本地图片</SelectItem>
-                    <SelectItem value="urls">多个URL随机</SelectItem>
-                    <SelectItem value="bing">Bing每日一图</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <!-- 图标来源设置 -->
-              <div class="space-y-2">
-                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">图标来源</label>
-                <Select
-                  v-model="formValues.iconSource"
-                >
-                  <SelectTrigger class="w-full">
-                    <SelectValue placeholder="选择图标来源" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="google-s2">Google S2</SelectItem>
-                    <SelectItem value="sinan">Sinan服务</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <!-- Newtab背景详细设置 -->
-            <div class="space-y-4">
-              <!-- 本地图片上传 -->
-              <div v-if="formValues.newtabBackgroundSource === 'local'" class="space-y-2">
-                <ImageUpload
-                  v-model="formValues.newtabBackgroundImage"
-                  label="上传背景图片"
-                />
-              </div>
-
-              <!-- 多个URL输入 -->
-              <div v-if="formValues.newtabBackgroundSource === 'urls'" class="space-y-2">
-                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景图片URLs</label>
-                <Textarea
-                  v-model="urlTextarea"
-                  placeholder="每行输入一个图片URL，支持jpg、png、gif、webp格式&#10;例如：&#10;https://example.com/image1.jpg&#10;https://example.com/image2.png&#10;https://unsplash.com/photo/xxx"
-                  class="w-full resize-none min-h-[8rem] max-h-[12rem] overflow-y-auto"
-                  rows="6"
-                />
-                <div class="text-xs text-muted-foreground">
-                  有效URL数量: {{ validUrlCount }} / 总数: {{ totalUrlCount }}
-                </div>
-              </div>
-
-              <!-- Bing图片预览 -->
-              <div v-if="formValues.newtabBackgroundSource === 'bing'" class="space-y-2">
-                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Bing每日一图预览</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  @click="previewBingImage"
-                  :disabled="isLoadingBingImage"
-                  class="w-full"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
-                  {{ isLoadingBingImage ? '加载中...' : '预览今日Bing图片' }}
-                </Button>
-
-                <!-- Bing图片预览区域 -->
-                <div v-if="bingImageUrl" class="relative">
-                  <img
-                    :src="bingImageUrl"
-                    alt="Bing每日一图预览"
-                    class="w-full h-32 object-cover rounded-md border border-border"
-                  />
-                  <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                    Bing每日一图
-                  </div>
-                </div>
-              </div>
-
-              <!-- 毛玻璃效果设置 -->
-              <div v-if="formValues.newtabBackgroundSource !== 'blank'" class="space-y-2">
-                <BlurSlider
-                  v-model="formValues.newtabBlurIntensity"
-                  label="毛玻璃力度"
-                  :min="0"
-                  :max="20"
-                  :step="1"
-                />
-              </div>
-            </div>
-
             <!-- 自动同步和同步间隔 -->
             <div class="flex items-center justify-between gap-4">
               <!-- Switch 开关自动同步书签 -->
               <div class="flex items-center gap-2 space-y-0">
                 <label class="text-sm text-foreground font-medium">自动同步</label>
-                <Switch 
+                <Switch
                   v-model="formValues.autoSync"
                 />
               </div>
@@ -1047,7 +1128,7 @@ const previewBingImage = async () => {
               <!-- 同步间隔时间 -->
               <div class="flex items-center gap-2 space-y-0">
                 <label class="text-sm text-foreground font-medium">间隔</label>
-                <Select 
+                <Select
                   v-model="formValues.syncInterval"
                 >
                   <SelectTrigger class="w-20">

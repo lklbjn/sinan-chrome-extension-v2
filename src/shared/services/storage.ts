@@ -17,6 +17,10 @@ export interface SinanConfig {
   newtabBackgroundBingUrl?: string;
   newtabBlurEnabled: boolean;
   newtabBlurIntensity: number;
+
+  // 欢迎词配置
+  welcomeTitle: string;
+  welcomeSubtitle: string;
 }
 
 const DEFAULT_CONFIG: SinanConfig = {
@@ -35,6 +39,10 @@ const DEFAULT_CONFIG: SinanConfig = {
   newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
   newtabBlurEnabled: false,
   newtabBlurIntensity: 10,
+
+  // 欢迎词默认配置
+  welcomeTitle: 'Welcome to Sinan',
+  welcomeSubtitle: "Let's hurry to our destination.",
 };
 
 export class StorageService {

@@ -195,6 +195,12 @@ const backgroundDirectUrl = ref('')
 // 服务地址配置
 const webUrl = ref('https://sinan.host')
 
+// 欢迎词配置
+const welcomeConfig = ref({
+  title: 'Welcome to Sinan',
+  subtitle: "Let's hurry to our destination."
+})
+
 // 加载当前配置的背景
 const loadBackgroundConfig = async () => {
   console.log('=== Loading Background Config ===')
@@ -211,6 +217,12 @@ const loadBackgroundConfig = async () => {
 
     // 设置服务地址
     webUrl.value = config.webUrl || 'https://sinan.host'
+
+    // 设置欢迎词
+    welcomeConfig.value = {
+      title: config.welcomeTitle || 'Welcome to Sinan',
+      subtitle: config.welcomeSubtitle || "Let's hurry to our destination."
+    }
 
     // 根据背景来源加载背景图片
     console.log('Loading background, source:', backgroundConfig.value.source)
@@ -1042,8 +1054,8 @@ watch(searchQuery, (newQuery) => {
     <!-- 顶部区域 -->
     <div class="flex items-center justify-between mb-8">
       <div class="bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-white/20 dark:border-white/10">
-        <h1 class="text-4xl font-bold mb-2 text-shadow-lg text-white dark:text-white drop-shadow-2xl">Welcome back!</h1>
-        <p class="text-white/80 dark:text-white/70 drop-shadow-lg">你从哪个应用开始以下是你最常用的应用</p>
+        <h1 class="text-4xl font-bold mb-2 text-shadow-lg text-white dark:text-white drop-shadow-2xl">{{ welcomeConfig.title }}</h1>
+        <p class="text-white/80 dark:text-white/70 drop-shadow-lg">{{ welcomeConfig.subtitle }}</p>
       </div>
       <div class="flex items-center gap-2 bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl p-2 shadow-lg border border-white/20 dark:border-white/10">
         <!-- Sinan 主页按钮 -->
