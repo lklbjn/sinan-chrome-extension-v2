@@ -41,10 +41,57 @@ export class NewtabBackgroundService {
     }
   }
 
+  // 从URL数组中随机选择一个URL
+  static getRandomUrl(urls: string[]): string {
+    if (!urls || urls.length === 0) {
+      return ''
+    }
+    const randomIndex = Math.floor(Math.random() * urls.length)
+    return urls[randomIndex]
+  }
+
+  // 验证URL是否是有效的图片URL
+  static isValidImageUrl(url: string): boolean {
+    try {
+      new URL(url)
+      // 检查是否是常见的图片格式
+      return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(url) ||
+             /\/(image|img)\//i.test(url) ||
+             url.includes('unsplash') ||
+             url.includes('pixabay') ||
+             url.includes('pexels')
+    } catch {
+      return false
+    }
+  }
+
+  // 过滤有效的图片URL
+  static filterValidImageUrls(urls: string[]): string[] {
+    return urls.filter(url => url.trim() && this.isValidImageUrl(url.trim()))
+  }
+
   // 获取当前背景图片URL
   static async getCurrentBackgroundImageUrl(config: any): Promise<string> {
     if (config.newtabBackgroundSource === 'local' && config.newtabBackgroundImage) {
       return config.newtabBackgroundImage
+    } else if (config.newtabBackgroundSource === 'urls' && config.newtabBackgroundUrls) {
+      try {
+        // 解析JSON字符串为数组
+        const urls = typeof config.newtabBackgroundUrls === 'string'
+          ? JSON.parse(config.newtabBackgroundUrls)
+          : config.newtabBackgroundUrls
+
+        if (Array.isArray(urls)) {
+          const validUrls = this.filterValidImageUrls(urls)
+          if (validUrls.length > 0) {
+            return this.getRandomUrl(validUrls)
+          }
+        }
+        return ''
+      } catch (error) {
+        console.error('解析背景URL失败:', error)
+        return ''
+      }
     } else if (config.newtabBackgroundSource === 'bing') {
       try {
         return await this.getBingDailyImage()

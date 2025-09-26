@@ -31,8 +31,9 @@ const isDarkMode = ref(false)
 // Newtab背景配置
 const backgroundConfig = ref({
   enabled: true,
-  source: 'blank' as 'local' | 'blank' | 'bing',
+  source: 'blank' as 'local' | 'blank' | 'bing' | 'urls',
   image: '',
+  urls: '' as string,
   blurEnabled: true,
   blurIntensity: 10
 })
@@ -52,6 +53,7 @@ const loadBackgroundConfig = async () => {
       enabled: config.newtabBackgroundEnabled,
       source: config.newtabBackgroundSource,
       image: config.newtabBackgroundImage || '',
+      urls: config.newtabBackgroundUrls || '[]',
       blurEnabled: config.newtabBlurEnabled,
       blurIntensity: config.newtabBlurIntensity
     }
@@ -63,6 +65,19 @@ const loadBackgroundConfig = async () => {
       console.log('Using local image:', backgroundConfig.value.image)
       backgroundImageUrl.value = backgroundConfig.value.image
       backgroundDirectUrl.value = ''
+    } else if (backgroundConfig.value.source === 'urls') {
+      try {
+        const randomUrl = await NewtabBackgroundService.getCurrentBackgroundImageUrl(config)
+        if (randomUrl) {
+          console.log('Using random URL image:', randomUrl)
+          backgroundDirectUrl.value = randomUrl
+          backgroundImageUrl.value = ''
+        } else {
+          console.log('No valid URLs available')
+        }
+      } catch (error) {
+        console.error('加载随机URL图片失败:', error)
+      }
     } else if (backgroundConfig.value.source === 'bing') {
       try {
         const bingUrl = await NewtabBackgroundService.getBingDailyImage()

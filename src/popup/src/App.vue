@@ -75,6 +75,9 @@ const addBookmarkAlert = ref<{ show: boolean; type: 'success' | 'error'; message
   message: ''
 })
 
+// URL文本域
+const urlTextarea = ref('')
+
 // 表单状态持久化
 const formValues = ref({
   serverUrl: 'https://sinan.host',
@@ -85,8 +88,9 @@ const formValues = ref({
 
   // Newtab背景配置
   newtabBackgroundEnabled: true,
-  newtabBackgroundSource: 'blank' as 'local' | 'blank' | 'bing',
+  newtabBackgroundSource: 'blank' as 'local' | 'blank' | 'bing' | 'urls',
   newtabBackgroundImage: '',
+  newtabBackgroundUrls: '',
   newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
   newtabBlurEnabled: false,
   newtabBlurIntensity: 10,
@@ -103,23 +107,46 @@ const hasChanges = computed(() => {
     formValues.value.newtabBackgroundSource !== originalConfig.value.newtabBackgroundSource ||
     formValues.value.newtabBackgroundImage !== originalConfig.value.newtabBackgroundImage ||
     formValues.value.newtabBackgroundBingUrl !== originalConfig.value.newtabBackgroundBingUrl ||
-    formValues.value.newtabBlurIntensity !== originalConfig.value.newtabBlurIntensity
+    formValues.value.newtabBlurIntensity !== originalConfig.value.newtabBlurIntensity ||
+    JSON.stringify(formValues.value.newtabBackgroundUrls) !== JSON.stringify(originalConfig.value.newtabBackgroundUrls)
   )
 })
 
 const lastSyncText = computed(() => {
   if (!lastSyncTime.value) return '尚未同步'
-  
+
   const now = Date.now()
   const diff = now - lastSyncTime.value
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
-  
+
   if (days > 0) return `${days}天前`
   if (hours > 0) return `${hours}小时前`
   if (minutes > 0) return `${minutes}分钟前`
   return '刚刚'
+})
+
+// URL处理相关计算属性
+const totalUrlCount = computed(() => {
+  return urlTextarea.value.split('\n').filter(line => line.trim()).length
+})
+
+const validUrlCount = computed(() => {
+  const urls = urlTextarea.value.split('\n').filter(line => line.trim())
+  return urls.filter(url => {
+    try {
+      new URL(url.trim())
+      const trimmedUrl = url.trim()
+      return /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i.test(trimmedUrl) ||
+             /\/(image|img)\//i.test(trimmedUrl) ||
+             trimmedUrl.includes('unsplash') ||
+             trimmedUrl.includes('pixabay') ||
+             trimmedUrl.includes('pexels')
+    } catch {
+      return false
+    }
+  }).length
 })
 
 
@@ -140,12 +167,22 @@ onMounted(async () => {
       newtabBackgroundEnabled: config.newtabBackgroundEnabled,
       newtabBackgroundSource: config.newtabBackgroundSource,
       newtabBackgroundImage: config.newtabBackgroundImage || '',
+      newtabBackgroundUrls: config.newtabBackgroundUrls || '[]',
       newtabBackgroundBingUrl: config.newtabBackgroundBingUrl || 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
       newtabBlurEnabled: config.newtabBlurEnabled,
       newtabBlurIntensity: config.newtabBlurIntensity,
     }
 
     lastSyncTime.value = config.lastSyncTime
+
+    // 初始化URL文本域
+    try {
+      const urls = config.newtabBackgroundUrls ? JSON.parse(config.newtabBackgroundUrls) : []
+      urlTextarea.value = Array.isArray(urls) ? urls.join('\n') : ''
+    } catch (error) {
+      console.error('解析初始背景URL失败:', error)
+      urlTextarea.value = ''
+    }
 
     // 初始化当前标签页信息
     await refreshCurrentTabInfo()
@@ -163,6 +200,28 @@ onMounted(async () => {
     isLoading.value = false
   }
 
+})
+
+// 监听URL文本域变化并同步到formValues
+watch(urlTextarea, (newValue) => {
+  const urls = newValue.split('\n')
+    .map(line => line.trim())
+    .filter(line => line)
+  formValues.value.newtabBackgroundUrls = JSON.stringify(urls)
+})
+
+// 监听formValues.newtabBackgroundUrls变化并同步到文本域（用于重置等操作）
+watch(() => formValues.value.newtabBackgroundUrls, (newUrls) => {
+  try {
+    const urls = newUrls ? JSON.parse(newUrls) : []
+    const textContent = Array.isArray(urls) ? urls.join('\n') : ''
+    if (urlTextarea.value !== textContent) {
+      urlTextarea.value = textContent
+    }
+  } catch (error) {
+    console.error('解析背景URL失败:', error)
+    urlTextarea.value = ''
+  }
 })
 
 const onSubmit = async () => {
@@ -187,7 +246,7 @@ const onSubmit = async () => {
       newtabBackgroundEnabled: formValues.value.newtabBackgroundEnabled,
       newtabBackgroundSource: formValues.value.newtabBackgroundSource,
       newtabBackgroundImage: formValues.value.newtabBackgroundImage,
-      newtabBackgroundBingUrl: formValues.value.newtabBackgroundBingUrl,
+      newtabBackgroundUrls: formValues.value.newtabBackgroundUrls || '[]',
       newtabBlurEnabled: formValues.value.newtabBlurIntensity > 0,
       newtabBlurIntensity: formValues.value.newtabBlurIntensity,
     })
@@ -236,6 +295,7 @@ const handleRestoreDefault = () => {
     newtabBackgroundEnabled: true,
     newtabBackgroundSource: 'blank',
     newtabBackgroundImage: '',
+    newtabBackgroundUrls: '',
     newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
     newtabBlurEnabled: false,
     newtabBlurIntensity: 10,
@@ -870,6 +930,7 @@ const previewBingImage = async () => {
                   <SelectContent>
                     <SelectItem value="blank">空</SelectItem>
                     <SelectItem value="local">本地图片</SelectItem>
+                    <SelectItem value="urls">多个URL随机</SelectItem>
                     <SelectItem value="bing">Bing每日一图</SelectItem>
                   </SelectContent>
                 </Select>
@@ -902,7 +963,20 @@ const previewBingImage = async () => {
                 />
               </div>
 
-  
+              <!-- 多个URL输入 -->
+              <div v-if="formValues.newtabBackgroundSource === 'urls'" class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景图片URLs</label>
+                <Textarea
+                  v-model="urlTextarea"
+                  placeholder="每行输入一个图片URL，支持jpg、png、gif、webp格式&#10;例如：&#10;https://example.com/image1.jpg&#10;https://example.com/image2.png&#10;https://unsplash.com/photo/xxx"
+                  class="w-full resize-none min-h-[8rem] max-h-[12rem] overflow-y-auto"
+                  rows="6"
+                />
+                <div class="text-xs text-muted-foreground">
+                  有效URL数量: {{ validUrlCount }} / 总数: {{ totalUrlCount }}
+                </div>
+              </div>
+
               <!-- Bing图片预览 -->
               <div v-if="formValues.newtabBackgroundSource === 'bing'" class="space-y-2">
                 <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Bing每日一图预览</label>

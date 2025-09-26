@@ -10,8 +10,9 @@ export interface SinanConfig {
 
   // Newtab背景配置
   newtabBackgroundEnabled: boolean;
-  newtabBackgroundSource: 'local' | 'blank' | 'bing';
+  newtabBackgroundSource: 'local' | 'blank' | 'bing' | 'urls';
   newtabBackgroundImage?: string;
+  newtabBackgroundUrls?: string; // 存储为JSON字符串
   newtabBackgroundBingUrl?: string;
   newtabBlurEnabled: boolean;
   newtabBlurIntensity: number;
@@ -28,6 +29,7 @@ const DEFAULT_CONFIG: SinanConfig = {
   newtabBackgroundEnabled: true,
   newtabBackgroundSource: 'blank',
   newtabBackgroundImage: '',
+  newtabBackgroundUrls: '',
   newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
   newtabBlurEnabled: false,
   newtabBlurIntensity: 10,
@@ -43,26 +45,32 @@ export class StorageService {
           const config = result[this.STORAGE_KEY];
           let finalConfig = config ? { ...DEFAULT_CONFIG, ...config } : DEFAULT_CONFIG;
 
-          // 从local storage获取背景图片
+          // 从local storage获取背景图片和URLs
           try {
             console.log('[StorageService] 开始读取local storage背景数据');
             const localResult = await new Promise<any>((localResolve) => {
               chrome.storage.local.get([
-                `${this.STORAGE_KEY}_backgroundImage`
+                `${this.STORAGE_KEY}_backgroundImage`,
+                `${this.STORAGE_KEY}_backgroundUrls`
               ], localResolve);
             });
 
             console.log('[StorageService] 从local storage读取到的数据:', localResult);
 
             const backgroundImage = localResult[`${this.STORAGE_KEY}_backgroundImage`];
+            const backgroundUrls = localResult[`${this.STORAGE_KEY}_backgroundUrls`];
 
             console.log('[StorageService] 解析后的背景图片:', backgroundImage);
+            console.log('[StorageService] 解析后的背景URLs:', backgroundUrls);
 
             if (backgroundImage) {
               finalConfig.newtabBackgroundImage = backgroundImage;
             }
+            if (backgroundUrls) {
+              finalConfig.newtabBackgroundUrls = backgroundUrls;
+            }
           } catch (error) {
-            console.warn('[StorageService] 读取背景图片失败:', error);
+            console.warn('[StorageService] 读取背景数据失败:', error);
           }
 
           console.log('[StorageService] 读取配置:', finalConfig);
@@ -85,13 +93,13 @@ export class StorageService {
     const currentConfig = await this.getConfig();
     const newConfig = { ...currentConfig, ...config };
 
-    // 分离配置：小配置用sync，大图片用local
-    const { newtabBackgroundImage, ...syncConfig } = newConfig;
+    // 分离配置：小配置用sync，大数据用local
+    const { newtabBackgroundImage, newtabBackgroundUrls, ...syncConfig } = newConfig;
 
     console.log('[StorageService] 保存配置:', syncConfig);
     console.log('[StorageService] 保存的 iconSource:', syncConfig.iconSource);
     console.log('[StorageService] 保存的背景图片:', newtabBackgroundImage);
-
+    console.log('[StorageService] 保存的背景URLs:', JSON.stringify(newtabBackgroundUrls));
     return new Promise((resolve, reject) => {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
         // 先保存主要配置到sync
@@ -103,9 +111,10 @@ export class StorageService {
               return;
             }
 
-            // 保存背景图片到local
+            // 保存背景数据到local
             const localData = {
-              [`${this.STORAGE_KEY}_backgroundImage`]: newtabBackgroundImage || ''
+              [`${this.STORAGE_KEY}_backgroundImage`]: newtabBackgroundImage || '',
+              [`${this.STORAGE_KEY}_backgroundUrls`]: newtabBackgroundUrls || '[]'
             }
             console.log('[StorageService] 保存到local storage的数据:', localData);
 
@@ -163,9 +172,10 @@ export class StorageService {
             return;
           }
 
-          // 同时清理local storage中的图片
+          // 同时清理local storage中的背景数据
           chrome.storage.local.remove([
-            `${this.STORAGE_KEY}_backgroundImage`
+            `${this.STORAGE_KEY}_backgroundImage`,
+            `${this.STORAGE_KEY}_backgroundUrls`
           ], () => {
             if (chrome.runtime.lastError) {
               reject(chrome.runtime.lastError);
