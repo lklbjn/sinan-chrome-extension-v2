@@ -1,5 +1,6 @@
 export interface SinanConfig {
-  serverUrl: string;
+  serverUrl: string; // API接口地址
+  webUrl: string; // 服务地址（主页地址）
   apiKey: string;
   autoSync: boolean;
   syncInterval: string;
@@ -20,6 +21,7 @@ export interface SinanConfig {
 
 const DEFAULT_CONFIG: SinanConfig = {
   serverUrl: 'https://sinan.host/api/',
+  webUrl: 'https://sinan.host',
   apiKey: '',
   autoSync: false,
   syncInterval: '30',

@@ -80,7 +80,8 @@ const urlTextarea = ref('')
 
 // 表单状态持久化
 const formValues = ref({
-  serverUrl: 'https://sinan.host',
+  serverUrl: 'https://sinan.host/api/',
+  webUrl: 'https://sinan.host',
   apiKey: '',
   autoSync: false,
   syncInterval: '30',
@@ -100,6 +101,7 @@ const formValues = ref({
 const hasChanges = computed(() => {
   return (
     formValues.value.serverUrl !== originalConfig.value.serverUrl ||
+    formValues.value.webUrl !== originalConfig.value.webUrl ||
     formValues.value.apiKey !== originalConfig.value.apiKey ||
     formValues.value.autoSync !== originalConfig.value.autoSync ||
     formValues.value.syncInterval !== originalConfig.value.syncInterval ||
@@ -158,6 +160,7 @@ onMounted(async () => {
     // 更新持久化表单值
     formValues.value = {
       serverUrl: config.serverUrl,
+      webUrl: config.webUrl || 'https://sinan.host',
       apiKey: config.apiKey,
       autoSync: config.autoSync,
       syncInterval: config.syncInterval,
@@ -237,6 +240,7 @@ const onSubmit = async () => {
   try {
     await StorageService.saveConfig({
       serverUrl: formValues.value.serverUrl,
+      webUrl: formValues.value.webUrl,
       apiKey: formValues.value.apiKey,
       autoSync: formValues.value.autoSync,
       syncInterval: formValues.value.syncInterval,
@@ -285,7 +289,8 @@ const handleReset = () => {
 const handleRestoreDefault = () => {
   // 恢复到默认配置
   formValues.value = {
-    serverUrl: 'https://sinan.host/api',
+    serverUrl: 'https://sinan.host/api/',
+    webUrl: 'https://sinan.host',
     apiKey: '',
     autoSync: false,
     syncInterval: '30',
@@ -351,7 +356,7 @@ const handleSync = async () => {
 }
 
 const handleOpenSinan = () => {
-  const url = 'https://sinan.host'
+  const url = formValues.value.webUrl || 'https://sinan.host'
   if (typeof chrome !== 'undefined' && chrome.tabs) {
     chrome.tabs.create({ url })
   } else {
@@ -895,17 +900,27 @@ const previewBingImage = async () => {
         <TabsContent value="settings" class="space-y-4">
           <!-- 表单区域 -->
           <div class="space-y-4">
-            <!-- Sinan服务器地址 -->
+            <!-- 服务地址 -->
             <div class="space-y-2">
               <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">服务地址</label>
-              <Input 
-                v-model="formValues.serverUrl" 
-                placeholder="请输入服务器地址" 
-                autocomplete="off" 
+              <Input
+                v-model="formValues.webUrl"
+                placeholder="请输入服务地址"
+                autocomplete="off"
               />
             </div>
 
-            <!-- 接口密钥地址 -->
+            <!-- API接口地址 -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">接口地址</label>
+              <Input
+                v-model="formValues.serverUrl"
+                placeholder="请输入API接口地址"
+                autocomplete="off"
+              />
+            </div>
+
+            <!-- 接口密钥 -->
             <div class="space-y-2">
               <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">接口密钥</label>
               <Input 

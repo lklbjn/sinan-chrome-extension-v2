@@ -44,6 +44,9 @@ const backgroundImageUrl = ref('')
 // 用于直接CSS背景的URL（不需要base64转换）
 const backgroundDirectUrl = ref('')
 
+// 服务地址配置
+const webUrl = ref('https://sinan.host')
+
 // 加载当前配置的背景
 const loadBackgroundConfig = async () => {
   console.log('=== Loading Background Config ===')
@@ -57,6 +60,9 @@ const loadBackgroundConfig = async () => {
       blurEnabled: config.newtabBlurEnabled,
       blurIntensity: config.newtabBlurIntensity
     }
+
+    // 设置服务地址
+    webUrl.value = config.webUrl || 'https://sinan.host'
 
     // 根据背景来源加载背景图片
     console.log('Loading background, source:', backgroundConfig.value.source)
@@ -425,7 +431,7 @@ const handleRefresh = async () => {
 }
 
 const openSinanHomepage = () => {
-  const sinanUrl = 'https://sinan.host'
+  const sinanUrl = webUrl.value
   if (typeof chrome !== 'undefined' && chrome.tabs) {
     chrome.tabs.create({ url: sinanUrl, active: true })
   } else {
