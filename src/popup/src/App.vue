@@ -99,6 +99,9 @@ const formValues = ref({
   // 欢迎词配置
   welcomeTitle: 'Welcome to Sinan',
   welcomeSubtitle: "Let's hurry to our destination.",
+
+  // 默认搜索引擎配置
+  defaultSearchEngine: 'baidu',
 })
 
 
@@ -116,7 +119,8 @@ const hasChanges = computed(() => {
     formValues.value.newtabBlurIntensity !== originalConfig.value.newtabBlurIntensity ||
     JSON.stringify(formValues.value.newtabBackgroundUrls) !== JSON.stringify(originalConfig.value.newtabBackgroundUrls) ||
     formValues.value.welcomeTitle !== originalConfig.value.welcomeTitle ||
-    formValues.value.welcomeSubtitle !== originalConfig.value.welcomeSubtitle
+    formValues.value.welcomeSubtitle !== originalConfig.value.welcomeSubtitle ||
+    formValues.value.defaultSearchEngine !== originalConfig.value.defaultSearchEngine
   )
 })
 
@@ -184,6 +188,9 @@ onMounted(async () => {
       // 欢迎词配置
       welcomeTitle: config.welcomeTitle || 'Welcome to Sinan',
       welcomeSubtitle: config.welcomeSubtitle || "Let's hurry to our destination.",
+
+      // 默认搜索引擎配置
+      defaultSearchEngine: config.defaultSearchEngine || 'baidu',
     }
 
     lastSyncTime.value = config.lastSyncTime
@@ -267,6 +274,9 @@ const onSubmit = async () => {
       // 欢迎词配置
       welcomeTitle: formValues.value.welcomeTitle,
       welcomeSubtitle: formValues.value.welcomeSubtitle,
+
+      // 默认搜索引擎配置
+      defaultSearchEngine: formValues.value.defaultSearchEngine,
     })
     
     // 更新 API 实例以使用新的配置
@@ -322,6 +332,9 @@ const handleRestoreDefault = () => {
     // 欢迎词默认配置
     welcomeTitle: 'Welcome to Sinan',
     welcomeSubtitle: "Let's hurry to our destination.",
+
+    // 默认搜索引擎默认配置
+    defaultSearchEngine: 'baidu',
   }
 }
 
@@ -830,6 +843,31 @@ const previewBingImage = async () => {
                 autocomplete="off"
               />
             </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">默认搜索引擎</label>
+              <Select v-model="formValues.defaultSearchEngine">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="选择默认搜索引擎" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baidu">百度</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="bing">Bing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <!-- 保存按钮 -->
+            <Button
+              type="button"
+              class="w-full"
+              :variant="hasChanges ? 'destructive' : 'default'"
+              @click="onSubmit"
+              :disabled="isLoading || !hasChanges || isSaving"
+            >
+              {{ saveButtonText }}
+            </Button>
           </div>
 
           <div class="border-b border-border" />

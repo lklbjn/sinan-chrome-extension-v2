@@ -1021,7 +1021,7 @@ onMounted(async () => {
 })
 
 // 处理搜索框回车事件
-const handleSearchEnter = () => {
+const handleSearchEnter = async () => {
   const query = searchQuery.value.trim()
   if (!query) return
 
@@ -1032,10 +1032,31 @@ const handleSearchEnter = () => {
     return
   }
 
-  // 如果没有书签搜索结果，使用默认搜索引擎（百度）搜索
-  const searchUrl = 'https://www.baidu.com/s?wd={query}'.replace('{query}', encodeURIComponent(query))
-  console.log('搜索框回车，使用百度搜索:', searchUrl)
-  window.location.href = searchUrl
+  // 如果没有书签搜索结果，使用配置的默认搜索引擎搜索
+  try {
+    const config = await StorageService.getConfig()
+    const defaultEngine = config.defaultSearchEngine || 'baidu'
+
+    // 找到对应的搜索引擎
+    const searchEngine = defaultSearchEngines.value.find(engine => engine.id === `search-${defaultEngine}`) as (BookmarkResp & { searchUrl: string }) | undefined
+
+    if (searchEngine && searchEngine.searchUrl) {
+      const searchUrl = searchEngine.searchUrl.replace('{query}', encodeURIComponent(query))
+      console.log(`搜索框回车，使用${searchEngine.name}搜索:`, searchUrl)
+      window.location.href = searchUrl
+    } else {
+      // 如果找不到配置的搜索引擎，回退到百度
+      const searchUrl = 'https://www.baidu.com/s?wd={query}'.replace('{query}', encodeURIComponent(query))
+      console.log('搜索框回车，回退到百度搜索:', searchUrl)
+      window.location.href = searchUrl
+    }
+  } catch (error) {
+    console.error('获取默认搜索引擎配置失败:', error)
+    // 出错时回退到百度
+    const searchUrl = 'https://www.baidu.com/s?wd={query}'.replace('{query}', encodeURIComponent(query))
+    console.log('搜索框回车，出错回退到百度搜索:', searchUrl)
+    window.location.href = searchUrl
+  }
 }
 
 // 监听搜索输入变化

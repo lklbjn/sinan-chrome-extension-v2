@@ -21,6 +21,9 @@ export interface SinanConfig {
   // 欢迎词配置
   welcomeTitle: string;
   welcomeSubtitle: string;
+
+  // 默认搜索引擎配置
+  defaultSearchEngine: string;
 }
 
 const DEFAULT_CONFIG: SinanConfig = {
@@ -43,6 +46,9 @@ const DEFAULT_CONFIG: SinanConfig = {
   // 欢迎词默认配置
   welcomeTitle: 'Welcome to Sinan',
   welcomeSubtitle: "Let's hurry to our destination.",
+
+  // 默认搜索引擎默认配置
+  defaultSearchEngine: 'baidu',
 };
 
 export class StorageService {
