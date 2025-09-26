@@ -404,21 +404,18 @@ const filteredBookmarks = computed(() => {
     }
   }
 
-  // 如果没有搜索查询，合并书签和搜索引擎
-  // 如果没有书签，只显示搜索引擎；如果有书签，显示书签 + 搜索引擎
-  if (bookmarks.value.length === 0) {
-    // 无书签时，只显示搜索引擎
-    return defaultSearchEngines.value
-  } else {
-    // 有书签时，书签 + 搜索引擎一起显示
-    return [...bookmarks.value, ...defaultSearchEngines.value]
-  }
+  // 如果没有搜索查询，只显示书签，不显示搜索引擎
+  return bookmarks.value
 })
 
 // 获取显示名称，替换 {query} 为实际搜索内容
 const getDisplayName = (bookmark: BookmarkResp) => {
   if (searchQuery.value.trim() && bookmark.name.includes('{query}')) {
     return bookmark.name.replace('{query}', searchQuery.value.trim())
+  }
+  // 如果没有搜索查询但名称包含{query}，则只显示平台名称
+  if (bookmark.name.includes('{query}')) {
+    return bookmark.name.replace('{query} For ', '')
   }
   return bookmark.name
 }
@@ -1044,13 +1041,14 @@ watch(searchQuery, (newQuery) => {
     <div class="relative z-10 min-h-screen bg-background/80 text-foreground p-8" :style="backdropStyle">
     <!-- 顶部区域 -->
     <div class="flex items-center justify-between mb-8">
-      <div>
-        <h1 class="text-4xl font-bold mb-2">Welcome back!</h1>
-        <p class="text-muted-foreground">你从哪个应用开始以下是你最常用的应用</p>
+      <div class="bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-white/20 dark:border-white/10">
+        <h1 class="text-4xl font-bold mb-2 text-shadow-lg text-white dark:text-white drop-shadow-2xl">Welcome back!</h1>
+        <p class="text-white/80 dark:text-white/70 drop-shadow-lg">你从哪个应用开始以下是你最常用的应用</p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl p-2 shadow-lg border border-white/20 dark:border-white/10">
         <!-- Sinan 主页按钮 -->
-        <Button variant="outline" size="icon" @click="openSinanHomepage" class="h-10 w-10">
+        <Button variant="ghost" size="icon" @click="openSinanHomepage"
+                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -1058,14 +1056,16 @@ watch(searchQuery, (newQuery) => {
           </svg>
         </Button>
         <!-- 新增书签按钮 -->
-        <Button variant="outline" size="icon" @click="openAddBookmarkDialog" class="h-10 w-10">
+        <Button variant="ghost" size="icon" @click="openAddBookmarkDialog"
+                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </Button>
         <!-- 暗黑模式切换按钮 -->
-        <Button variant="outline" size="icon" @click="toggleDarkMode" class="h-10 w-10">
+        <Button variant="ghost" size="icon" @click="toggleDarkMode"
+                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
           <!-- 太阳图标（浅色模式） -->
           <svg v-if="isDarkMode" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1079,7 +1079,8 @@ watch(searchQuery, (newQuery) => {
           </svg>
         </Button>
         <!-- 刷新按钮 -->
-        <Button variant="outline" size="icon" @click="handleRefresh" :disabled="isRefreshing" class="h-10 w-10">
+        <Button variant="ghost" size="icon" @click="handleRefresh" :disabled="isRefreshing"
+                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200 disabled:opacity-50">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
           :class="{ 'animate-spin': isRefreshing }">
@@ -1094,9 +1095,16 @@ watch(searchQuery, (newQuery) => {
 
     <!-- 搜索框 -->
     <div class="mb-8 max-w-md mx-auto relative">
-      <Input v-model="searchQuery" placeholder="搜索书签名称、网址、描述或标签..." class="w-full" @keyup.enter="handleSearchEnter" />
-      <div v-if="isSearching" class="absolute right-3 top-1/2 transform -translate-y-1/2">
-        <svg class="animate-spin h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <div class="bg-white/20 dark:bg-black/30 backdrop-blur-lg rounded-2xl p-1 shadow-xl border border-white/30 dark:border-white/20">
+        <Input v-model="searchQuery" placeholder="搜索书签名称、网址、描述或标签..."
+               class="w-full bg-white/80 dark:bg-black/60 border-0 rounded-xl shadow-none backdrop-blur-sm
+                      placeholder:text-gray-600 dark:placeholder:text-gray-300
+                      text-gray-900 dark:text-white
+                      focus:bg-white/90 dark:focus:bg-black/70 transition-all duration-200"
+               @keyup.enter="handleSearchEnter" />
+      </div>
+      <div v-if="isSearching" class="absolute right-4 top-1/2 transform -translate-y-1/2">
+        <svg class="animate-spin h-4 w-4 text-gray-600 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
