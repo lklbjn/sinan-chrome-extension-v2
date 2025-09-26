@@ -7,6 +7,14 @@ export interface SinanConfig {
   lastSyncTime?: number;
   lastSelectedNamespaceId?: string;
   lastSelectedTagIds?: string[];
+
+  // Newtab背景配置
+  newtabBackgroundEnabled: boolean;
+  newtabBackgroundSource: 'local' | 'blank' | 'bing';
+  newtabBackgroundImage?: string;
+  newtabBackgroundBingUrl?: string;
+  newtabBlurEnabled: boolean;
+  newtabBlurIntensity: number;
 }
 
 const DEFAULT_CONFIG: SinanConfig = {
@@ -15,6 +23,14 @@ const DEFAULT_CONFIG: SinanConfig = {
   autoSync: false,
   syncInterval: '30',
   iconSource: 'google-s2',
+
+  // Newtab背景默认配置
+  newtabBackgroundEnabled: true,
+  newtabBackgroundSource: 'blank',
+  newtabBackgroundImage: '',
+  newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
+  newtabBlurEnabled: false,
+  newtabBlurIntensity: 10,
 };
 
 export class StorageService {
@@ -23,9 +39,32 @@ export class StorageService {
   static async getConfig(): Promise<SinanConfig> {
     return new Promise((resolve) => {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(this.STORAGE_KEY, (result: any) => {
+        chrome.storage.sync.get(this.STORAGE_KEY, async (result: any) => {
           const config = result[this.STORAGE_KEY];
-          const finalConfig = config ? { ...DEFAULT_CONFIG, ...config } : DEFAULT_CONFIG;
+          let finalConfig = config ? { ...DEFAULT_CONFIG, ...config } : DEFAULT_CONFIG;
+
+          // 从local storage获取背景图片
+          try {
+            console.log('[StorageService] 开始读取local storage背景数据');
+            const localResult = await new Promise<any>((localResolve) => {
+              chrome.storage.local.get([
+                `${this.STORAGE_KEY}_backgroundImage`
+              ], localResolve);
+            });
+
+            console.log('[StorageService] 从local storage读取到的数据:', localResult);
+
+            const backgroundImage = localResult[`${this.STORAGE_KEY}_backgroundImage`];
+
+            console.log('[StorageService] 解析后的背景图片:', backgroundImage);
+
+            if (backgroundImage) {
+              finalConfig.newtabBackgroundImage = backgroundImage;
+            }
+          } catch (error) {
+            console.warn('[StorageService] 读取背景图片失败:', error);
+          }
+
           console.log('[StorageService] 读取配置:', finalConfig);
           console.log('[StorageService] iconSource:', finalConfig.iconSource);
           resolve(finalConfig);
@@ -45,19 +84,43 @@ export class StorageService {
   static async saveConfig(config: Partial<SinanConfig>): Promise<void> {
     const currentConfig = await this.getConfig();
     const newConfig = { ...currentConfig, ...config };
-    console.log('[StorageService] 保存配置:', newConfig);
-    console.log('[StorageService] 保存的 iconSource:', newConfig.iconSource);
-    
+
+    // 分离配置：小配置用sync，大图片用local
+    const { newtabBackgroundImage, ...syncConfig } = newConfig;
+
+    console.log('[StorageService] 保存配置:', syncConfig);
+    console.log('[StorageService] 保存的 iconSource:', syncConfig.iconSource);
+    console.log('[StorageService] 保存的背景图片:', newtabBackgroundImage);
+
     return new Promise((resolve, reject) => {
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        // 先保存主要配置到sync
         chrome.storage.sync.set(
-          { [this.STORAGE_KEY]: newConfig },
+          { [this.STORAGE_KEY]: syncConfig },
           () => {
             if (chrome.runtime.lastError) {
               reject(chrome.runtime.lastError);
-            } else {
-              resolve();
+              return;
             }
+
+            // 保存背景图片到local
+            const localData = {
+              [`${this.STORAGE_KEY}_backgroundImage`]: newtabBackgroundImage || ''
+            }
+            console.log('[StorageService] 保存到local storage的数据:', localData);
+
+            chrome.storage.local.set(
+              localData,
+              () => {
+                if (chrome.runtime.lastError) {
+                  console.error('[StorageService] local storage保存失败:', chrome.runtime.lastError);
+                  reject(chrome.runtime.lastError);
+                } else {
+                  console.log('[StorageService] local storage保存成功');
+                  resolve();
+                }
+              }
+            );
           }
         );
       } else {
@@ -97,9 +160,19 @@ export class StorageService {
         chrome.storage.sync.remove(this.STORAGE_KEY, () => {
           if (chrome.runtime.lastError) {
             reject(chrome.runtime.lastError);
-          } else {
-            resolve();
+            return;
           }
+
+          // 同时清理local storage中的图片
+          chrome.storage.local.remove([
+            `${this.STORAGE_KEY}_backgroundImage`
+          ], () => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve();
+            }
+          });
         });
       } else {
         // Fallback to localStorage for development

@@ -22,7 +22,10 @@ import { StorageService } from '../../shared/services/storage'
 import { SinanApiService } from '../../shared/services/api'
 import { BookmarkService } from '../../shared/services/bookmark'
 import { IconCacheService } from '../../shared/services/iconCache'
+import { NewtabBackgroundService } from '../../shared/services/tagBackground'
 import type { SnSpace, TagResp } from '../../shared/types/api'
+import ImageUpload from '@/components/ui/image-upload/ImageUpload.vue'
+import BlurSlider from '@/components/ui/blur-slider/BlurSlider.vue'
 
 const mode = useColorMode({
   modes: {
@@ -62,6 +65,10 @@ const currentTab = ref({
 
 // 响应式引用来强制更新MultiSelect
 const multiSelectKey = ref(0)
+
+// Bing图片预览
+const bingImageUrl = ref('')
+const isLoadingBingImage = ref(false)
 const addBookmarkAlert = ref<{ show: boolean; type: 'success' | 'error'; message: string }>({
   show: false,
   type: 'success',
@@ -75,6 +82,14 @@ const formValues = ref({
   autoSync: false,
   syncInterval: '30',
   iconSource: 'google-s2' as 'google-s2' | 'sinan',
+
+  // Newtab背景配置
+  newtabBackgroundEnabled: true,
+  newtabBackgroundSource: 'blank' as 'local' | 'blank' | 'bing',
+  newtabBackgroundImage: '',
+  newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
+  newtabBlurEnabled: false,
+  newtabBlurIntensity: 10,
 })
 
 
@@ -84,7 +99,11 @@ const hasChanges = computed(() => {
     formValues.value.apiKey !== originalConfig.value.apiKey ||
     formValues.value.autoSync !== originalConfig.value.autoSync ||
     formValues.value.syncInterval !== originalConfig.value.syncInterval ||
-    formValues.value.iconSource !== originalConfig.value.iconSource
+    formValues.value.iconSource !== originalConfig.value.iconSource ||
+    formValues.value.newtabBackgroundSource !== originalConfig.value.newtabBackgroundSource ||
+    formValues.value.newtabBackgroundImage !== originalConfig.value.newtabBackgroundImage ||
+    formValues.value.newtabBackgroundBingUrl !== originalConfig.value.newtabBackgroundBingUrl ||
+    formValues.value.newtabBlurIntensity !== originalConfig.value.newtabBlurIntensity
   )
 })
 
@@ -116,6 +135,14 @@ onMounted(async () => {
       autoSync: config.autoSync,
       syncInterval: config.syncInterval,
       iconSource: config.iconSource,
+
+      // Newtab背景配置
+      newtabBackgroundEnabled: config.newtabBackgroundEnabled,
+      newtabBackgroundSource: config.newtabBackgroundSource,
+      newtabBackgroundImage: config.newtabBackgroundImage || '',
+      newtabBackgroundBingUrl: config.newtabBackgroundBingUrl || 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
+      newtabBlurEnabled: config.newtabBlurEnabled,
+      newtabBlurIntensity: config.newtabBlurIntensity,
     }
 
     lastSyncTime.value = config.lastSyncTime
@@ -139,11 +166,15 @@ onMounted(async () => {
 })
 
 const onSubmit = async () => {
+  console.log('=== 开始保存配置 ===')
+  console.log('hasChanges:', hasChanges.value)
+  console.log('formValues:', formValues.value)
+
   if (!hasChanges.value) return
-  
+
   isSaving.value = true
   saveButtonText.value = '保存中...'
-  
+
   try {
     await StorageService.saveConfig({
       serverUrl: formValues.value.serverUrl,
@@ -151,6 +182,14 @@ const onSubmit = async () => {
       autoSync: formValues.value.autoSync,
       syncInterval: formValues.value.syncInterval,
       iconSource: formValues.value.iconSource,
+
+      // Newtab背景配置
+      newtabBackgroundEnabled: formValues.value.newtabBackgroundEnabled,
+      newtabBackgroundSource: formValues.value.newtabBackgroundSource,
+      newtabBackgroundImage: formValues.value.newtabBackgroundImage,
+      newtabBackgroundBingUrl: formValues.value.newtabBackgroundBingUrl,
+      newtabBlurEnabled: formValues.value.newtabBlurIntensity > 0,
+      newtabBlurIntensity: formValues.value.newtabBlurIntensity,
     })
     
     // 更新 API 实例以使用新的配置
@@ -162,7 +201,9 @@ const onSubmit = async () => {
     }
     
     originalConfig.value = { ...formValues.value }
-    saveButtonText.value = '保存成功'
+    console.log('=== 配置保存成功 ===')
+    console.log('新的originalConfig:', originalConfig.value)
+    saveButtonText.value = '保存成功 刷新后生效'
     setTimeout(() => {
       saveButtonText.value = '保存'
     }, 2000)
@@ -190,6 +231,14 @@ const handleRestoreDefault = () => {
     autoSync: false,
     syncInterval: '30',
     iconSource: 'google-s2',
+
+    // Newtab背景默认配置
+    newtabBackgroundEnabled: true,
+    newtabBackgroundSource: 'blank',
+    newtabBackgroundImage: '',
+    newtabBackgroundBingUrl: 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1',
+    newtabBlurEnabled: false,
+    newtabBlurIntensity: 10,
   }
 }
 
@@ -597,6 +646,21 @@ const toggleDarkMode = () => {
   mode.value = mode.value === 'dark' ? 'light' : 'dark'
 }
 
+// 预览Bing每日一图
+const previewBingImage = async () => {
+  if (isLoadingBingImage.value) return
+
+  isLoadingBingImage.value = true
+  try {
+    bingImageUrl.value = await NewtabBackgroundService.getBingDailyImage()
+  } catch (error) {
+    console.error('获取Bing图片失败:', error)
+    bingImageUrl.value = ''
+  } finally {
+    isLoadingBingImage.value = false
+  }
+}
+
 </script>
 
 
@@ -726,10 +790,6 @@ const toggleDarkMode = () => {
                 placeholder="选择标签（可多选）"
                 :key="multiSelectKey"
               />
-              <!-- 调试信息 -->
-              <div class="text-xs text-muted-foreground mt-1">
-                调试: 选中{{ currentTab.tagIds.length }}个标签，共{{ tags.length }}个可用
-              </div>
             </div>
           </div>
           
@@ -796,20 +856,93 @@ const toggleDarkMode = () => {
               />
             </div>
 
-            <!-- 图标来源设置 -->
-            <div class="space-y-2">
-              <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">图标来源</label>
-              <Select 
-                v-model="formValues.iconSource"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择图标来源" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="google-s2">Google S2</SelectItem>
-                  <SelectItem value="sinan">Sinan服务</SelectItem>
-                </SelectContent>
-              </Select>
+            <!-- 来源设置 -->
+            <div class="grid grid-cols-2 gap-4">
+              <!-- Newtab背景来源选择 -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">背景来源</label>
+                <Select
+                  v-model="formValues.newtabBackgroundSource"
+                >
+                  <SelectTrigger class="w-full">
+                    <SelectValue placeholder="选择背景来源" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blank">空</SelectItem>
+                    <SelectItem value="local">本地图片</SelectItem>
+                    <SelectItem value="bing">Bing每日一图</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <!-- 图标来源设置 -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">图标来源</label>
+                <Select
+                  v-model="formValues.iconSource"
+                >
+                  <SelectTrigger class="w-full">
+                    <SelectValue placeholder="选择图标来源" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="google-s2">Google S2</SelectItem>
+                    <SelectItem value="sinan">Sinan服务</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <!-- Newtab背景详细设置 -->
+            <div class="space-y-4">
+              <!-- 本地图片上传 -->
+              <div v-if="formValues.newtabBackgroundSource === 'local'" class="space-y-2">
+                <ImageUpload
+                  v-model="formValues.newtabBackgroundImage"
+                  label="上传背景图片"
+                />
+              </div>
+
+  
+              <!-- Bing图片预览 -->
+              <div v-if="formValues.newtabBackgroundSource === 'bing'" class="space-y-2">
+                <label class="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Bing每日一图预览</label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  @click="previewBingImage"
+                  :disabled="isLoadingBingImage"
+                  class="w-full"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                  {{ isLoadingBingImage ? '加载中...' : '预览今日Bing图片' }}
+                </Button>
+
+                <!-- Bing图片预览区域 -->
+                <div v-if="bingImageUrl" class="relative">
+                  <img
+                    :src="bingImageUrl"
+                    alt="Bing每日一图预览"
+                    class="w-full h-32 object-cover rounded-md border border-border"
+                  />
+                  <div class="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+                    Bing每日一图
+                  </div>
+                </div>
+              </div>
+
+              <!-- 毛玻璃效果设置 -->
+              <div v-if="formValues.newtabBackgroundSource !== 'blank'" class="space-y-2">
+                <BlurSlider
+                  v-model="formValues.newtabBlurIntensity"
+                  label="毛玻璃力度"
+                  :min="0"
+                  :max="20"
+                  :step="1"
+                />
+              </div>
             </div>
 
             <!-- 自动同步和同步间隔 -->

@@ -10,6 +10,8 @@ import { SinanApiService } from '../../shared/services/api'
 import { IconService } from '../../shared/services/icon'
 import { IconCacheService } from '../../shared/services/iconCache'
 import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
+import { StorageService } from '../../shared/services/storage'
+import { NewtabBackgroundService } from '../../shared/services/tagBackground'
 import type { BookmarkResp, SnSpace } from '../../shared/types/api'
 
 const bookmarks = ref<BookmarkResp[]>([])
@@ -25,6 +27,98 @@ const errorAlert = ref<{ show: boolean; message: string }>({
 
 // 暗黑模式状态
 const isDarkMode = ref(false)
+
+// Newtab背景配置
+const backgroundConfig = ref({
+  enabled: true,
+  source: 'blank' as 'local' | 'blank' | 'bing',
+  image: '',
+  blurEnabled: true,
+  blurIntensity: 10
+})
+
+// 背景图片URL
+const backgroundImageUrl = ref('')
+
+// 用于直接CSS背景的URL（不需要base64转换）
+const backgroundDirectUrl = ref('')
+
+// 加载当前配置的背景
+const loadBackgroundConfig = async () => {
+  console.log('=== Loading Background Config ===')
+  try {
+    const config = await StorageService.getConfig()
+    backgroundConfig.value = {
+      enabled: config.newtabBackgroundEnabled,
+      source: config.newtabBackgroundSource,
+      image: config.newtabBackgroundImage || '',
+      blurEnabled: config.newtabBlurEnabled,
+      blurIntensity: config.newtabBlurIntensity
+    }
+
+    // 根据背景来源加载背景图片
+    console.log('Loading background, source:', backgroundConfig.value.source)
+
+    if (backgroundConfig.value.source === 'local' && backgroundConfig.value.image) {
+      console.log('Using local image:', backgroundConfig.value.image)
+      backgroundImageUrl.value = backgroundConfig.value.image
+      backgroundDirectUrl.value = ''
+    } else if (backgroundConfig.value.source === 'bing') {
+      try {
+        const bingUrl = await NewtabBackgroundService.getBingDailyImage()
+        console.log('Using Bing image:', bingUrl)
+        backgroundImageUrl.value = bingUrl
+        backgroundDirectUrl.value = ''
+      } catch (error) {
+        console.error('加载Bing图片失败:', error)
+      }
+    } else {
+      console.log('No background image to load')
+    }
+  } catch (error) {
+    console.error('加载背景配置失败:', error)
+  }
+}
+
+// 获取背景样式
+const backgroundStyle = computed(() => {
+  console.log('Computing background style:')
+  console.log('  source:', backgroundConfig.value.source)
+  console.log('  backgroundImageUrl:', backgroundImageUrl.value)
+  console.log('  backgroundDirectUrl:', backgroundDirectUrl.value)
+
+  if (backgroundConfig.value.source === 'blank' || (!backgroundImageUrl.value && !backgroundDirectUrl.value)) {
+    console.log('No background image, returning empty style')
+    return {}
+  }
+
+  const imageUrl = backgroundImageUrl.value || backgroundDirectUrl.value
+  console.log('Using image URL:', imageUrl)
+
+  const style: any = {
+    backgroundImage: `url(${imageUrl})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundAttachment: 'fixed'
+  }
+
+  console.log('Background style:', style)
+  return style
+})
+
+// 获取毛玻璃样式
+const backdropStyle = computed(() => {
+  if (backgroundConfig.value.source === 'blank' || backgroundConfig.value.blurIntensity === 0) {
+    return {}
+  }
+
+  return {
+    backdropFilter: `blur(${backgroundConfig.value.blurIntensity}px)`,
+    WebkitBackdropFilter: `blur(${backgroundConfig.value.blurIntensity}px)`,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+  }
+})
 
 // 新增书签对话框状态
 const showAddBookmarkDialog = ref(false)
@@ -644,6 +738,9 @@ const toggleDarkMode = () => {
 }
 
 onMounted(async () => {
+  // 加载背景配置
+  await loadBackgroundConfig()
+
   // 从本地存储读取暗黑模式设置
   const savedDarkMode = localStorage.getItem('darkMode')
   if (savedDarkMode === 'true') {
@@ -713,7 +810,12 @@ watch(searchQuery, (newQuery) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background text-foreground p-8">
+  <div class="min-h-screen relative" :style="backgroundStyle">
+    <!-- 背景遮罩层 -->
+    <div v-if="backgroundConfig.enabled" class="absolute inset-0 bg-black/20"></div>
+
+    <!-- 主要内容区域 -->
+    <div class="relative z-10 min-h-screen bg-background/80 text-foreground p-8" :style="backdropStyle">
     <!-- 顶部区域 -->
     <div class="flex items-center justify-between mb-8">
       <div>
@@ -906,6 +1008,7 @@ watch(searchQuery, (newQuery) => {
           </Button>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>
