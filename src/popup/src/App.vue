@@ -11,17 +11,18 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { MultiSelect } from "@/components/ui/multi-select";
 import Tabs from "@/components/ui/tabs/Tabs.vue";
 import TabsList from "@/components/ui/tabs/TabsList.vue";
 import TabsTrigger from "@/components/ui/tabs/TabsTrigger.vue";
 import TabsContent from "@/components/ui/tabs/TabsContent.vue";
 import { useColorMode } from '@vueuse/core'
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref, computed, watch, nextTick } from 'vue'
 import { StorageService } from '../../shared/services/storage'
 import { SinanApiService } from '../../shared/services/api'
 import { BookmarkService } from '../../shared/services/bookmark'
 import { IconCacheService } from '../../shared/services/iconCache'
-import type { SnSpace } from '../../shared/types/api'
+import type { SnSpace, TagResp } from '../../shared/types/api'
 
 const mode = useColorMode({
   modes: {
@@ -50,12 +51,17 @@ const syncAlert = ref<{ show: boolean; type: 'success' | 'error'; message: strin
 // 新增书签相关状态
 const isAddingBookmark = ref(false)
 const namespaces = ref<SnSpace[]>([])
+const tags = ref<TagResp[]>([])
 const currentTab = ref({
   title: '',
   url: '',
   description: '',
-  namespaceId: ''
+  namespaceId: '',
+  tagIds: [] as string[]
 })
+
+// 响应式引用来强制更新MultiSelect
+const multiSelectKey = ref(0)
 const addBookmarkAlert = ref<{ show: boolean; type: 'success' | 'error'; message: string }>({
   show: false,
   type: 'success',
@@ -102,7 +108,7 @@ onMounted(async () => {
   try {
     const config = await StorageService.getConfig()
     originalConfig.value = { ...config }
-    
+
     // 更新持久化表单值
     formValues.value = {
       serverUrl: config.serverUrl,
@@ -111,17 +117,25 @@ onMounted(async () => {
       syncInterval: config.syncInterval,
       iconSource: config.iconSource,
     }
-    
+
     lastSyncTime.value = config.lastSyncTime
-    
+
     // 初始化当前标签页信息
     await refreshCurrentTabInfo()
+
+    // 启动选择变化监听
+    const cleanup = watchSelectionChanges()
+
+    // 在组件卸载时清理监听器
+    onUnmounted(() => {
+      cleanup()
+    })
   } catch (error) {
     console.error('Failed to load config:', error)
   } finally {
     isLoading.value = false
   }
-  
+
 })
 
 const onSubmit = async () => {
@@ -282,6 +296,29 @@ const handleDeleteBookmarks = async () => {
   }
 }
 
+// 监听空间和标签选择变化并保存到缓存
+const watchSelectionChanges = () => {
+  // 监听空间选择变化
+  const unwatchNamespace = watch(() => currentTab.value.namespaceId, async (newNamespaceId) => {
+    if (newNamespaceId) {
+      console.log('空间选择发生变化，保存到缓存:', newNamespaceId)
+      await StorageService.saveLastSelected(newNamespaceId, currentTab.value.tagIds)
+    }
+  })
+
+  // 监听标签选择变化
+  const unwatchTags = watch(() => currentTab.value.tagIds, async (newTagIds) => {
+    console.log('标签选择发生变化，保存到缓存:', newTagIds)
+    await StorageService.saveLastSelected(currentTab.value.namespaceId, newTagIds)
+  })
+
+  // 返回清理函数
+  return () => {
+    unwatchNamespace()
+    unwatchTags()
+  }
+}
+
 // 获取当前标签页信息
 const getCurrentTabInfo = async () => {
   try {
@@ -399,12 +436,16 @@ const loadNamespaces = async () => {
     const response = await SinanApiService.getSpaces()
     if (response.code === 0) {
       namespaces.value = response.data
-      
-      // 如果没有选中的namespace，默认选择第一个
-      if (namespaces.value.length > 0 && !currentTab.value.namespaceId) {
+
+      // 尝试从缓存中恢复上次选择的空间
+      const lastSelected = await StorageService.getLastSelected()
+      if (lastSelected.namespaceId && namespaces.value.some(ns => ns.id === lastSelected.namespaceId)) {
+        currentTab.value.namespaceId = lastSelected.namespaceId
+      } else if (namespaces.value.length > 0 && !currentTab.value.namespaceId) {
+        // 如果缓存中没有有效的namespace，默认选择第一个
         currentTab.value.namespaceId = namespaces.value[0].id
       }
-      
+
       console.log('加载namespace成功:', response.data.length, '个空间')
     } else {
       console.error('获取namespace列表失败:', response.message)
@@ -414,22 +455,77 @@ const loadNamespaces = async () => {
   }
 }
 
+// 获取所有标签
+const loadTags = async () => {
+  try {
+    const response = await SinanApiService.getTags()
+    if (response.code === 0) {
+      // 使用响应式更新
+      tags.value = response.data
+      console.log('标签数据已加载:', tags.value.length, '个标签')
+
+      // 尝试从缓存中恢复上次选择的标签
+      const lastSelected = await StorageService.getLastSelected()
+      console.log('从缓存中获取的上次选择:', lastSelected)
+
+      if (lastSelected.tagIds && Array.isArray(lastSelected.tagIds) && lastSelected.tagIds.length > 0) {
+        // 只保留仍然存在的标签
+        const validTagIds = lastSelected.tagIds.filter(tagId =>
+          tags.value.some(tag => tag.id === tagId)
+        )
+        console.log('有效的标签ID:', validTagIds)
+        console.log('无效的标签ID:', lastSelected.tagIds.filter(tagId =>
+          !tags.value.some(tag => tag.id === tagId)
+        ))
+
+        // 使用nextTick确保DOM更新
+        await nextTick()
+        // 直接设置标签ID数组，使用深拷贝确保响应性
+        currentTab.value.tagIds = [...validTagIds]
+        console.log('已恢复标签选择:', currentTab.value.tagIds)
+        console.log('currentTab.tagIds 类型:', typeof currentTab.value.tagIds, 'isArray:', Array.isArray(currentTab.value.tagIds))
+        console.log('标签绑定状态 - currentTab.tagIds:', currentTab.value.tagIds)
+        console.log('标签绑定状态 - tags数据:', tags.value)
+
+        // 强制更新MultiSelect组件
+        multiSelectKey.value++
+        await nextTick()
+      } else {
+        console.log('缓存中没有找到标签选择或标签选择为空')
+        await nextTick()
+        currentTab.value.tagIds = []
+      }
+
+      console.log('加载标签成功:', response.data.length, '个标签')
+    } else {
+      console.error('获取标签列表失败:', response.message)
+    }
+  } catch (error) {
+    console.error('获取标签列表时出错:', error)
+  }
+}
+
 // 刷新当前标签页信息
 const refreshCurrentTabInfo = async () => {
   console.log('刷新标签页信息开始...')
   addBookmarkAlert.value.show = false
-  
-  // 清空当前信息
+
+  // 清空当前信息（但保留标签ID以便后续恢复）
   currentTab.value = {
     title: '',
     url: '',
     description: '',
-    namespaceId: ''
+    namespaceId: '',
+    tagIds: [] // 先清空，让loadTags从缓存中恢复
   }
-  
+
+  // 获取当前标签页信息
   await getCurrentTabInfo()
-  await loadNamespaces()
-  console.log('刷新标签页信息完成')
+
+  // 加载空间和标签数据，并从缓存中恢复选择
+  await Promise.all([loadNamespaces(), loadTags()])
+
+  console.log('刷新标签页信息完成，最终标签选择:', currentTab.value.tagIds)
 }
 
 // 添加书签到Sinan
@@ -450,17 +546,29 @@ const addBookmarkToSinan = async () => {
       name: currentTab.value.title.trim(),
       url: currentTab.value.url.trim(),
       description: currentTab.value.description.trim() || undefined,
-      namespaceId: currentTab.value.namespaceId || undefined
+      namespaceId: currentTab.value.namespaceId || undefined,
+      tagsIds: currentTab.value.tagIds.length > 0 ? currentTab.value.tagIds : undefined
     })
 
     if (response.code === 0) {
       console.log('书签添加成功:', response.data)
+
+      // 保存当前选择的空间和标签到缓存
+      await StorageService.saveLastSelected(
+        currentTab.value.namespaceId,
+        currentTab.value.tagIds
+      )
+      console.log('已保存当前选择到缓存:', {
+        namespaceId: currentTab.value.namespaceId,
+        tagIds: currentTab.value.tagIds
+      })
+
       addBookmarkAlert.value = {
         show: true,
         type: 'success',
         message: '书签添加成功！'
       }
-      
+
       // 3秒后自动隐藏成功提示
       setTimeout(() => {
         addBookmarkAlert.value.show = false
@@ -599,15 +707,29 @@ const toggleDarkMode = () => {
                   <SelectValue placeholder="选择一个空间" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem 
-                    v-for="namespace in namespaces" 
-                    :key="namespace.id" 
+                  <SelectItem
+                    v-for="namespace in namespaces"
+                    :key="namespace.id"
                     :value="namespace.id"
                   >
                     {{ namespace.name }}
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <label class="text-sm font-medium mb-1 block">选择标签</label>
+              <MultiSelect
+                v-model="currentTab.tagIds"
+                :items="tags"
+                placeholder="选择标签（可多选）"
+                :key="multiSelectKey"
+              />
+              <!-- 调试信息 -->
+              <div class="text-xs text-muted-foreground mt-1">
+                调试: 选中{{ currentTab.tagIds.length }}个标签，共{{ tags.length }}个可用
+              </div>
             </div>
           </div>
           

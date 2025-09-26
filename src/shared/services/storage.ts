@@ -5,6 +5,8 @@ export interface SinanConfig {
   syncInterval: string;
   iconSource: 'google-s2' | 'sinan';
   lastSyncTime?: number;
+  lastSelectedNamespaceId?: string;
+  lastSelectedTagIds?: string[];
 }
 
 const DEFAULT_CONFIG: SinanConfig = {
@@ -72,6 +74,21 @@ export class StorageService {
 
   static async updateLastSyncTime(): Promise<void> {
     await this.saveConfig({ lastSyncTime: Date.now() });
+  }
+
+  static async saveLastSelected(namespaceId?: string, tagIds?: string[]): Promise<void> {
+    await this.saveConfig({
+      lastSelectedNamespaceId: namespaceId,
+      lastSelectedTagIds: tagIds
+    });
+  }
+
+  static async getLastSelected(): Promise<{ namespaceId?: string; tagIds?: string[] }> {
+    const config = await this.getConfig();
+    return {
+      namespaceId: config.lastSelectedNamespaceId,
+      tagIds: config.lastSelectedTagIds
+    };
   }
 
   static async clearConfig(): Promise<void> {

@@ -70,4 +70,5 @@ export type ResultBookmarkResp = ApiResult<BookmarkResp>;
 export type ResultListBookmarkResp = ApiResult<BookmarkResp[]>;
 export type ResultListBookmarkTreeResp = ApiResult<BookmarkTreeResp[]>;
 export type ResultListSnSpace = ApiResult<SnSpace[]>;
+export type ResultListTagResp = ApiResult<TagResp[]>;
 export type ResultString = ApiResult<string>;

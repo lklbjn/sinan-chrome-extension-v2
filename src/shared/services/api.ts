@@ -5,6 +5,7 @@ import type {
   ResultListBookmarkResp,
   ResultListBookmarkTreeResp,
   ResultListSnSpace,
+  ResultListTagResp,
   ResultString,
   MostVisitedParams,
 } from '../types/api';
@@ -89,6 +90,11 @@ export class SinanApiService {
 
   static async getSpaces(): Promise<ResultListSnSpace> {
     const response = await this.fetchWithConfig('/api/spaces');
+    return response.json();
+  }
+
+  static async getTags(): Promise<ResultListTagResp> {
+    const response = await this.fetchWithConfig('/api/tags');
     return response.json();
   }
 
