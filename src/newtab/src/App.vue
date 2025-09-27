@@ -17,6 +17,11 @@ import type { BookmarkResp, SnSpace } from '../../shared/types/api'
 const bookmarks = ref<BookmarkResp[]>([])
 const searchQuery = ref('')
 
+// 书签选中状态管理 - 矩阵导航
+const selectedRow = ref(-1) // -1 表示在搜索框
+const selectedCol = ref(0) // 列索引
+const isKeyboardNavigation = ref(false) // 标记是否在使用键盘导航
+
 // 默认搜索引擎书签
 const defaultSearchEngines = ref<BookmarkResp[]>([
   {
@@ -346,6 +351,41 @@ const calculateBookmarksLimit = () => {
 
   return totalBookmarks
 }
+
+// 计算网格布局信息
+const calculateGridLayout = () => {
+  const screenWidth = window.innerWidth
+  const pageMargin = 64  // p-8 = 32px * 2
+  const cardMinWidth = 300 + 16  // minmax(300px) + gap-4
+
+  // 计算每行可放置的卡片数量
+  const columnsPerRow = Math.floor((screenWidth - pageMargin) / cardMinWidth)
+
+  return {
+    columnsPerRow: Math.max(1, columnsPerRow) // 至少1列
+  }
+}
+
+// 获取当前网格布局信息
+const gridLayout = computed(() => calculateGridLayout())
+
+// 根据行列获取书签索引
+const getBookmarkIndex = (row: number, col: number): number => {
+  return row * gridLayout.value.columnsPerRow + col
+}
+
+// 根据书签索引获取行列
+const getRowCol = (index: number): { row: number, col: number } => {
+  const row = Math.floor(index / gridLayout.value.columnsPerRow)
+  const col = index % gridLayout.value.columnsPerRow
+  return { row, col }
+}
+
+// 获取当前选中的书签索引
+const selectedBookmarkIndex = computed(() => {
+  if (selectedRow.value === -1) return -1
+  return getBookmarkIndex(selectedRow.value, selectedCol.value)
+})
 
 // 搜索书签的函数
 const searchBookmarks = async (query: string) => {
@@ -994,6 +1034,9 @@ onMounted(async () => {
 
   window.addEventListener('resize', handleResize)
 
+  // 添加键盘事件监听
+  document.addEventListener('keydown', handleKeydown)
+
   // 监听系统主题变化
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   const handleThemeChange = (e: MediaQueryListEvent) => {
@@ -1012,6 +1055,7 @@ onMounted(async () => {
   // 组件卸载时清理事件监听
   return () => {
     window.removeEventListener('resize', handleResize)
+    document.removeEventListener('keydown', handleKeydown)
     mediaQuery.removeEventListener('change', handleThemeChange)
     clearTimeout(resizeTimeout)
     if (searchDebounceTimer.value) {
@@ -1019,6 +1063,188 @@ onMounted(async () => {
     }
   }
 })
+
+// 处理键盘事件
+const handleKeydown = (event: KeyboardEvent) => {
+  const currentBookmarks = filteredBookmarks.value
+
+  // 如果没有书签，不处理方向键
+  if (currentBookmarks.length === 0) return
+
+  const maxRows = Math.ceil(currentBookmarks.length / gridLayout.value.columnsPerRow)
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      isKeyboardNavigation.value = true
+      // 移除搜索框焦点
+      if (document.activeElement && 'blur' in document.activeElement) {
+        (document.activeElement as HTMLElement).blur()
+      }
+      if (selectedRow.value === -1) {
+        // 从搜索框按下方向键，选中第一行第一列
+        selectedRow.value = 0
+        selectedCol.value = 0
+      } else {
+        // 向下移动到下一行
+        const nextRow = selectedRow.value + 1
+        if (nextRow < maxRows) {
+          selectedRow.value = nextRow
+          // 确保选中的列在当前行的范围内
+          const maxColInRow = Math.min(gridLayout.value.columnsPerRow - 1,
+                                      currentBookmarks.length - nextRow * gridLayout.value.columnsPerRow - 1)
+          selectedCol.value = Math.min(selectedCol.value, maxColInRow)
+        }
+      }
+      scrollToSelectedBookmark()
+      break
+
+    case 'ArrowUp':
+      event.preventDefault()
+      isKeyboardNavigation.value = true
+      if (selectedRow.value > 0) {
+        // 移除搜索框焦点
+        if (document.activeElement && 'blur' in document.activeElement) {
+          (document.activeElement as HTMLElement).blur()
+        }
+        // 向上移动到上一行
+        selectedRow.value = selectedRow.value - 1
+        // 确保选中的列在当前行的范围内
+        const maxColInRow = Math.min(gridLayout.value.columnsPerRow - 1,
+                                    currentBookmarks.length - selectedRow.value * gridLayout.value.columnsPerRow - 1)
+        selectedCol.value = Math.min(selectedCol.value, maxColInRow)
+      } else if (selectedRow.value === 0) {
+        // 从第一行向上，回到搜索框
+        selectedRow.value = -1
+        selectedCol.value = 0
+        // 聚焦到搜索框
+        const searchInput = document.querySelector('input[placeholder*="搜索书签"]') as HTMLInputElement
+        if (searchInput) {
+          searchInput.focus()
+        }
+      }
+      break
+
+    case 'ArrowLeft':
+      event.preventDefault()
+      isKeyboardNavigation.value = true
+      // 移除搜索框焦点
+      if (document.activeElement && 'blur' in document.activeElement) {
+        (document.activeElement as HTMLElement).blur()
+      }
+      if (selectedRow.value >= 0) {
+        if (selectedCol.value > 0) {
+          // 向左移动到前一列
+          selectedCol.value = selectedCol.value - 1
+        } else {
+          // 在第一列时，移动到上一行的最后一列
+          if (selectedRow.value > 0) {
+            selectedRow.value = selectedRow.value - 1
+            const maxColInRow = Math.min(gridLayout.value.columnsPerRow - 1,
+                                        currentBookmarks.length - selectedRow.value * gridLayout.value.columnsPerRow - 1)
+            selectedCol.value = maxColInRow
+          }
+        }
+        scrollToSelectedBookmark()
+      }
+      break
+
+    case 'ArrowRight':
+      event.preventDefault()
+      isKeyboardNavigation.value = true
+      // 移除搜索框焦点
+      if (document.activeElement && 'blur' in document.activeElement) {
+        (document.activeElement as HTMLElement).blur()
+      }
+      if (selectedRow.value >= 0) {
+        const maxColInRow = Math.min(gridLayout.value.columnsPerRow - 1,
+                                    currentBookmarks.length - selectedRow.value * gridLayout.value.columnsPerRow - 1)
+        if (selectedCol.value < maxColInRow) {
+          // 向右移动到下一列
+          selectedCol.value = selectedCol.value + 1
+        } else {
+          // 在最后一列时，移动到下一行的第一列
+          const nextRow = selectedRow.value + 1
+          if (nextRow < maxRows) {
+            selectedRow.value = nextRow
+            selectedCol.value = 0
+          }
+        }
+        scrollToSelectedBookmark()
+      }
+      break
+
+    case 'Enter':
+      // 优先检查是否有书签被选中（焦点在书签矩阵中）
+      const currentIndex = selectedBookmarkIndex.value
+      if (selectedRow.value >= 0 && currentIndex >= 0 && currentIndex < currentBookmarks.length) {
+        // 如果焦点在书签矩阵中，回车键打开选中的书签
+        event.preventDefault()
+        openSelectedBookmark(true)
+      } else {
+        // 如果焦点不在书签矩阵中（在搜索框中），执行搜索逻辑
+        handleSearchEnter()
+      }
+      break
+
+    case 'Escape':
+      // ESC键取消选中
+      selectedRow.value = -1
+      selectedCol.value = 0
+      isKeyboardNavigation.value = false
+      break
+  }
+}
+
+// 打开选中的书签
+const openSelectedBookmark = async (openInCurrentTab: boolean = true) => {
+  const currentBookmarks = filteredBookmarks.value
+  const currentIndex = selectedBookmarkIndex.value
+  if (currentIndex < 0 || currentIndex >= currentBookmarks.length) return
+
+  const bookmark = currentBookmarks[currentIndex]
+
+  // 创建一个模拟的鼠标事件
+  const mockEvent = new MouseEvent('click', {
+    button: 0, // 左键
+    ctrlKey: !openInCurrentTab, // 右键时在新标签页打开
+    metaKey: false,
+    bubbles: true,
+    cancelable: true
+  })
+
+  await handleBookmarkClick(bookmark, mockEvent)
+}
+
+// 滚动到选中的书签
+const scrollToSelectedBookmark = () => {
+  // 延迟执行以确保DOM已更新
+  setTimeout(() => {
+    const selectedElement = document.querySelector('.bookmark-selected')
+    if (selectedElement) {
+      selectedElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      })
+    }
+  }, 50)
+}
+
+// 重置选中状态（当书签列表变化时）
+const resetSelection = () => {
+  selectedRow.value = -1
+  selectedCol.value = 0
+  isKeyboardNavigation.value = false
+}
+
+// 处理鼠标悬停事件
+const handleMouseEnter = (index: number) => {
+  // 鼠标悬停时重置键盘导航模式
+  isKeyboardNavigation.value = false
+  const { row, col } = getRowCol(index)
+  selectedRow.value = row
+  selectedCol.value = col
+}
 
 // 处理搜索框回车事件
 const handleSearchEnter = async () => {
@@ -1061,8 +1287,15 @@ const handleSearchEnter = async () => {
 
 // 监听搜索输入变化
 watch(searchQuery, (newQuery) => {
+  // 搜索内容变化时重置选中状态
+  resetSelection()
   debouncedSearch(newQuery)
 }, { immediate: false })
+
+// 监听书签列表变化，重置选中状态
+watch(filteredBookmarks, () => {
+  resetSelection()
+})
 </script>
 
 <template>
@@ -1134,7 +1367,7 @@ watch(searchQuery, (newQuery) => {
                       placeholder:text-gray-600 dark:placeholder:text-gray-300
                       text-gray-900 dark:text-white
                       focus:bg-white/90 dark:focus:bg-black/70 transition-all duration-200"
-               @keyup.enter="handleSearchEnter" />
+               @keydown.enter="handleSearchEnter" />
       </div>
       <div v-if="isSearching" class="absolute right-4 top-1/2 transform -translate-y-1/2">
         <svg class="animate-spin h-4 w-4 text-gray-600 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1158,12 +1391,14 @@ watch(searchQuery, (newQuery) => {
 
     <!-- 书签网格 -->
     <div v-else-if="filteredBookmarks.length > 0" class="grid gap-4 auto-fill-grid">
-      <div v-for="bookmark in filteredBookmarks" :key="bookmark.id" @click="handleBookmarkClick(bookmark, $event)"
-        @mousedown="handleMouseDown(bookmark, $event)" @contextmenu.prevent :class="[
+      <div v-for="(bookmark, index) in filteredBookmarks" :key="bookmark.id" @click="handleBookmarkClick(bookmark, $event)"
+        @mousedown="handleMouseDown(bookmark, $event)" @mouseenter="handleMouseEnter(index)" @contextmenu.prevent :class="[
                 'flex items-center gap-3 p-3 rounded-lg border bg-card text-card-foreground transition-all cursor-pointer overflow-hidden',
-                bookmark.star 
-                  ? 'shadow-sm hover:shadow-[0_0_20px_rgba(251,191,36,0.3)] border-amber-200/50 dark:border-amber-400/30 dark:hover:shadow-[0_0_20px_rgba(251,191,36,0.2)]' 
-                  : 'shadow-sm hover:shadow-md dark:hover:shadow-lg'
+                {
+                  'bookmark-selected ring-2 ring-blue-500 ring-opacity-60 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600': selectedBookmarkIndex === index,
+                  'shadow-sm hover:shadow-[0_0_20px_rgba(251,191,36,0.3)] border-amber-200/50 dark:border-amber-400/30 dark:hover:shadow-[0_0_20px_rgba(251,191,36,0.2)]': bookmark.star && selectedBookmarkIndex !== index,
+                  'shadow-sm hover:shadow-md dark:hover:shadow-lg': !bookmark.star && selectedBookmarkIndex !== index
+                }
               ]">
         <div class="flex items-center gap-3 h-full w-full overflow-hidden">
           <!-- 图标加载状态：skeleton -> 加载完成的图标 -->
