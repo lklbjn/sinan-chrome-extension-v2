@@ -13,6 +13,8 @@ import { BookmarkCacheService } from '../../shared/services/bookmarkCache'
 import { StorageService } from '../../shared/services/storage'
 import { NewtabBackgroundService } from '../../shared/services/tagBackground'
 import type { BookmarkResp, SnSpace } from '../../shared/types/api'
+import BlurSlider from "@/components/ui/blur-slider/BlurSlider.vue"
+import ImageUpload from "@/components/ui/image-upload/ImageUpload.vue"
 
 const bookmarks = ref<BookmarkResp[]>([])
 const searchQuery = ref('')
@@ -206,6 +208,19 @@ const welcomeConfig = ref({
   subtitle: "Let's hurry to our destination."
 })
 
+// 设置对话框状态
+const showSettingsDialog = ref(false)
+const settingsForm = ref({
+  welcomeTitle: '',
+  welcomeSubtitle: '',
+  defaultSearchEngine: 'baidu',
+  newtabBackgroundSource: 'blank' as 'local' | 'blank' | 'bing' | 'urls',
+  newtabBackgroundImage: '',
+  newtabBackgroundUrls: '',
+  newtabBlurIntensity: 10,
+  iconSource: 'google-s2' as 'google-s2' | 'sinan'
+})
+
 // 加载当前配置的背景
 const loadBackgroundConfig = async () => {
   console.log('=== Loading Background Config ===')
@@ -215,7 +230,7 @@ const loadBackgroundConfig = async () => {
       enabled: config.newtabBackgroundEnabled,
       source: config.newtabBackgroundSource,
       image: config.newtabBackgroundImage || '',
-      urls: config.newtabBackgroundUrls || '[]',
+      urls: config.newtabBackgroundUrls || '',
       blurEnabled: config.newtabBlurEnabled,
       blurIntensity: config.newtabBlurIntensity
     }
@@ -227,6 +242,18 @@ const loadBackgroundConfig = async () => {
     welcomeConfig.value = {
       title: config.welcomeTitle || 'Welcome to Sinan',
       subtitle: config.welcomeSubtitle || "Let's hurry to our destination."
+    }
+
+    // 设置表单初始值
+    settingsForm.value = {
+      welcomeTitle: config.welcomeTitle || 'Welcome to Sinan',
+      welcomeSubtitle: config.welcomeSubtitle || "Let's hurry to our destination.",
+      defaultSearchEngine: config.defaultSearchEngine || 'baidu',
+      newtabBackgroundSource: config.newtabBackgroundSource || 'blank',
+      newtabBackgroundImage: config.newtabBackgroundImage || '',
+      newtabBackgroundUrls: config.newtabBackgroundUrls || '',
+      newtabBlurIntensity: config.newtabBlurIntensity || 10,
+      iconSource: config.iconSource || 'google-s2'
     }
 
     // 根据背景来源加载背景图片
@@ -702,6 +729,57 @@ const openAddBookmarkDialog = async () => {
   } catch (error) {
     console.log('读取剪切板失败:', error)
     // 忽略剪切板读取错误，不影响用户体验
+  }
+}
+
+// 打开设置对话框
+const openSettingsDialog = async () => {
+  showSettingsDialog.value = true
+  // 从存储加载当前配置
+  const config = await StorageService.getConfig()
+  settingsForm.value = {
+    welcomeTitle: config.welcomeTitle || 'Welcome to Sinan',
+    welcomeSubtitle: config.welcomeSubtitle || "Let's hurry to our destination.",
+    defaultSearchEngine: config.defaultSearchEngine || 'baidu',
+    newtabBackgroundSource: config.newtabBackgroundSource || 'blank',
+    newtabBackgroundImage: config.newtabBackgroundImage || '',
+    newtabBackgroundUrls: config.newtabBackgroundUrls || '',
+    newtabBlurIntensity: config.newtabBlurIntensity || 10,
+    iconSource: config.iconSource || 'google-s2'
+  }
+}
+
+// 关闭设置对话框
+const closeSettingsDialog = () => {
+  showSettingsDialog.value = false
+}
+
+// 保存设置
+const saveSettings = async () => {
+  try {
+    const config = await StorageService.getConfig()
+    const updatedConfig = {
+      ...config,
+      welcomeTitle: settingsForm.value.welcomeTitle,
+      welcomeSubtitle: settingsForm.value.welcomeSubtitle,
+      defaultSearchEngine: settingsForm.value.defaultSearchEngine,
+      newtabBackgroundSource: settingsForm.value.newtabBackgroundSource,
+      newtabBackgroundImage: settingsForm.value.newtabBackgroundImage,
+      newtabBackgroundUrls: settingsForm.value.newtabBackgroundUrls,
+      newtabBlurIntensity: settingsForm.value.newtabBlurIntensity,
+      iconSource: settingsForm.value.iconSource
+    }
+    
+    await StorageService.saveConfig(updatedConfig)
+    console.log('设置保存成功')
+    
+    // 重新加载配置
+    await loadBackgroundConfig()
+    
+    // 关闭对话框
+    closeSettingsDialog()
+  } catch (error) {
+    console.error('保存设置失败:', error)
   }
 }
 
@@ -1317,27 +1395,28 @@ watch(filteredBookmarks, () => {
 
     <!-- 主要内容区域 -->
     <div class="relative z-10 min-h-screen bg-background/80 text-foreground p-8" :style="backdropStyle">
-    <!-- 顶部区域 -->
-    <div class="flex items-center justify-between mb-8">
-      <div :class="[
-        'backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border',
-        backgroundConfig.source === 'blank'
-          ? 'bg-white/90 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700'
-          : 'bg-white/10 dark:bg-black/20 border-white/20 dark:border-white/10'
-      ]">
-        <h1 :class="[
-          'text-4xl font-bold mb-2 text-shadow-lg drop-shadow-2xl',
+      <!-- 顶部区域 -->
+      <div class="flex items-center justify-between mb-8">
+        <div :class="[
+          'backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border',
           backgroundConfig.source === 'blank'
-            ? 'text-gray-900 dark:text-white'
-            : 'text-white dark:text-white'
-        ]">{{ welcomeConfig.title }}</h1>
-        <p :class="[
-          'drop-shadow-lg',
-          backgroundConfig.source === 'blank'
-            ? 'text-gray-600 dark:text-gray-300'
-            : 'text-white/80 dark:text-white/70'
-        ]">{{ welcomeConfig.subtitle }}</p>
-      </div>
+            ? 'bg-white/90 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700'
+            : 'bg-white/10 dark:bg-black/20 border-white/20 dark:border-white/10'
+        ]">
+          <h1 :class="[
+            'text-4xl font-bold mb-2 text-shadow-lg drop-shadow-2xl',
+            backgroundConfig.source === 'blank'
+              ? 'text-gray-900 dark:text-white'
+              : 'text-white dark:text-white'
+          ]">{{ welcomeConfig.title }}</h1>
+          <p :class="[
+            'drop-shadow-lg',
+            backgroundConfig.source === 'blank'
+              ? 'text-gray-600 dark:text-gray-300'
+              : 'text-white/80 dark:text-white/70'
+          ]">{{ welcomeConfig.subtitle }}</p>
+        </div>
+      
       <div :class="[
         'flex items-center gap-2 backdrop-blur-md rounded-2xl p-2 shadow-lg border',
         backgroundConfig.source === 'blank'
@@ -1408,8 +1487,24 @@ watch(filteredBookmarks, () => {
           <path d="M3 21v-5h5" />
         </svg>
         </Button>
+
+        <!-- 设置按钮 -->
+        <Button variant="ghost" size="icon" @click="openSettingsDialog"
+                :class="[
+                  'h-10 w-10 transition-all duration-200 hover:scale-110',
+                  backgroundConfig.source === 'blank'
+                    ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10'
+                ]">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </Button>
       </div>
-    </div>
+      </div>
+    
 
     <!-- 搜索框 -->
     <div class="mb-8 max-w-md mx-auto relative">
@@ -1570,8 +1665,152 @@ watch(filteredBookmarks, () => {
         </div>
       </div>
     </div>
+    <!-- 设置对话框 -->
+    <div v-if="showSettingsDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <!-- 背景遮罩 -->
+      <div class="fixed inset-0 backdrop-blur-sm bg-black/20" @click="closeSettingsDialog"></div>
+      
+      <!-- 对话框内容 -->
+      <div class="relative bg-background border rounded-lg shadow-lg w-full max-w-2xl mx-auto max-h-[85vh] overflow-hidden flex flex-col">
+        <!-- 对话框头部 -->
+        <div class="flex items-center justify-between p-6 border-b">
+          <h2 class="text-xl font-semibold">设置</h2>
+          <Button variant="ghost" size="icon" @click="closeSettingsDialog" class="h-6 w-6">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </Button>
+        </div>
+        
+        <!-- 可滚动的内容区域 -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
+          <div class="space-y-6">
+          <!-- 欢迎词配置 -->
+          <div class="space-y-4">
+            <h3 class="text-lg font-medium">欢迎词配置</h3>
+            <div class="grid grid-cols-1 gap-4">
+              <div>
+                <label class="text-sm font-medium mb-1 block">欢迎词标题</label>
+                <Input 
+                  v-model="settingsForm.welcomeTitle" 
+                  placeholder="请输入欢迎词标题" 
+                  class="w-full"
+                />
+              </div>
+              <div>
+                <label class="text-sm font-medium mb-1 block">欢迎词内容</label>
+                <Input 
+                  v-model="settingsForm.welcomeSubtitle" 
+                  placeholder="请输入欢迎词内容" 
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 搜索引擎配置 -->
+          <div class="space-y-4">
+            <h3 class="text-lg font-medium">搜索引擎配置</h3>
+            <div>
+              <label class="text-sm font-medium mb-1 block">默认搜索引擎</label>
+              <Select v-model="settingsForm.defaultSearchEngine">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="选择默认搜索引擎" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baidu">百度</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="bing">Bing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <!-- 图标来源配置 -->
+          <div class="space-y-4">
+            <h3 class="text-lg font-medium">图标来源配置</h3>
+            <div>
+              <label class="text-sm font-medium mb-1 block">图标来源</label>
+              <Select v-model="settingsForm.iconSource">
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="选择图标来源" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="google-s2">Google S2</SelectItem>
+                  <SelectItem value="sinan">Sinan服务</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <!-- 背景配置 -->
+          <div class="space-y-4">
+            <h3 class="text-lg font-medium">背景配置</h3>
+            <div class="grid grid-cols-1 gap-4">
+              <div>
+                <label class="text-sm font-medium mb-1 block">背景来源</label>
+                <Select v-model="settingsForm.newtabBackgroundSource">
+                  <SelectTrigger class="w-full">
+                    <SelectValue placeholder="选择背景来源" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blank">空</SelectItem>
+                    <SelectItem value="local">本地图片</SelectItem>
+                    <SelectItem value="urls">多个URL随机</SelectItem>
+                    <SelectItem value="bing">Bing每日一图</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <!-- 本地图片上传 -->
+              <div v-if="settingsForm.newtabBackgroundSource === 'local'">
+                <ImageUpload
+                  v-model="settingsForm.newtabBackgroundImage"
+                  label="上传背景图片"
+                />
+              </div>
+
+              <!-- 多个URL输入 -->
+              <div v-if="settingsForm.newtabBackgroundSource === 'urls'">
+                <label class="text-sm font-medium mb-1 block">背景图片URLs</label>
+                <Textarea
+                  v-model="settingsForm.newtabBackgroundUrls"
+                  placeholder="每行输入一个图片URL，支持jpg、png、gif、webp格式"
+                  class="w-full resize-none min-h-[6rem]"
+                  rows="4"
+                />
+              </div>
+
+              <!-- 毛玻璃效果设置 -->
+              <div v-if="settingsForm.newtabBackgroundSource !== 'blank'">
+                <BlurSlider
+                  v-model="settingsForm.newtabBlurIntensity"
+                  label="毛玻璃力度"
+                  :min="0"
+                  :max="20"
+                  :step="1"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 按钮区域 -->
+          <div class="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" @click="closeSettingsDialog">
+              取消
+            </Button>
+            <Button @click="saveSettings">
+              保存设置
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
     </div>
   </div>
+  
 </template>
 
 <style scoped>
@@ -1610,5 +1849,65 @@ watch(filteredBookmarks, () => {
 /* 确保 flex 容器正确处理溢出 */
 .min-w-0 {
   min-width: 0;
+}
+
+/* 现代自定义滚动条样式 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.6), hsl(var(--primary) / 0.8));
+  border-radius: 3px;
+  border: 1px solid hsl(var(--background));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.8), hsl(var(--primary)));
+  transform: scaleX(1.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.9));
+  transform: scaleX(1.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 暗色主题适配 */
+@media (prefers-color-scheme: dark) {
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.5), hsl(var(--primary) / 0.7));
+    border: 1px solid hsl(var(--border));
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.9));
+  }
+}
+
+/* Firefox 滚动条样式 */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.6) transparent;
+}
+
+.custom-scrollbar:hover {
+  scrollbar-color: hsl(var(--primary) / 0.8) transparent;
+}
+
+/* 平滑滚动效果 */
+.custom-scrollbar {
+  scroll-behavior: smooth;
 }
 </style>

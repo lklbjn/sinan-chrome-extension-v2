@@ -76,9 +76,9 @@ export class NewtabBackgroundService {
       return config.newtabBackgroundImage
     } else if (config.newtabBackgroundSource === 'urls' && config.newtabBackgroundUrls) {
       try {
-        // 解析JSON字符串为数组
+        // 解析纯文本格式为数组（每行一个URL）
         const urls = typeof config.newtabBackgroundUrls === 'string'
-          ? JSON.parse(config.newtabBackgroundUrls)
+          ? config.newtabBackgroundUrls.split('\n').filter((url: string) => url.trim())
           : config.newtabBackgroundUrls
 
         if (Array.isArray(urls)) {
