@@ -352,7 +352,7 @@ const handleSync = async () => {
     await StorageService.updateLastSyncTime()
     lastSyncTime.value = Date.now()
     
-    const successMsg = `同步成功！删除了 ${result.deleted} 个旧文件夹，创建了 ${result.created} 个书签空间`
+    const successMsg = `同步成功！删除了 ${result.deleted} 个旧文件夹，创建了 ${result.created.folders} 个书签空间`
     console.log(successMsg)
     
     syncAlert.value = {

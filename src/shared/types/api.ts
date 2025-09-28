@@ -24,6 +24,7 @@ export interface BookmarkTreeResp {
   spaceId: string;
   spaceName: string;
   spaceDescription: string;
+  children?: BookmarkTreeResp[]; // 支持多级目录
   bookmarks: BookmarkResp[];
 }
 
