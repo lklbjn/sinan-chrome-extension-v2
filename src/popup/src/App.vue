@@ -762,7 +762,7 @@ const previewBingImage = async () => {
 
 <template>
   <div :class="mode" class="min-h-full">
-    <div class="p-6 w-[360px] bg-background shadow-lg border border-border flex flex-col gap-6">
+    <div class="p-6 w-[360px] h-[600px] bg-background shadow-lg border border-border flex flex-col gap-6">
       <!-- 标题 -->
       <div class="text-lg text-primary flex items-center justify-between">
         <span>Sinan 书签管理</span>
@@ -783,7 +783,7 @@ const previewBingImage = async () => {
       </div>
 
       <!-- Tab导航 -->
-      <Tabs default-value="bookmark">
+      <Tabs default-value="bookmark" class="flex flex-col flex-1 overflow-hidden">
         <TabsList class="grid w-full grid-cols-3">
           <TabsTrigger value="main">基础功能</TabsTrigger>
           <TabsTrigger value="bookmark">添加书签</TabsTrigger>
@@ -791,7 +791,7 @@ const previewBingImage = async () => {
         </TabsList>
 
         <!-- 基础功能页面 -->
-        <TabsContent value="main" class="space-y-4">
+        <TabsContent value="main" class="flex flex-col h-full space-y-4 overflow-y-auto">
           <!-- 操作按钮 -->
           <div class="flex flex-col gap-4">
             <Button class="w-full" variant="default" @click="handleOpenSinan">打开Sinan主页</Button>
@@ -857,20 +857,7 @@ const previewBingImage = async () => {
                 </SelectContent>
               </Select>
             </div>
-
-            <!-- 保存按钮 -->
-            <Button
-              type="button"
-              class="w-full"
-              :variant="hasChanges ? 'destructive' : 'default'"
-              @click="onSubmit"
-              :disabled="isLoading || !hasChanges || isSaving"
-            >
-              {{ saveButtonText }}
-            </Button>
           </div>
-
-          <div class="border-b border-border" />
 
           <!-- 来源设置 -->
           <div class="grid grid-cols-2 gap-4">
@@ -1020,7 +1007,7 @@ const previewBingImage = async () => {
         </TabsContent>
 
         <!-- 添加书签页面 -->
-        <TabsContent value="bookmark" class="space-y-4">
+        <TabsContent value="bookmark" class="space-y-4 overflow-y-auto">
           <div class="space-y-3">
             <div>
               <label class="text-sm font-medium mb-1 block">网址</label>
@@ -1119,7 +1106,7 @@ const previewBingImage = async () => {
         </TabsContent>
 
         <!-- 系统配置页面 -->
-        <TabsContent value="settings" class="space-y-4">
+        <TabsContent value="settings" class="space-y-4 overflow-y-auto">
           <!-- 表单区域 -->
           <div class="space-y-4">
             <!-- 服务地址 -->
@@ -1230,4 +1217,38 @@ const previewBingImage = async () => {
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* 隐藏滚动条但保持滚动功能 */
+.overflow-y-auto::-webkit-scrollbar {
+  display: none;
+}
+
+.overflow-y-auto {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 针对所有可能的滚动容器 */
+:deep(.overflow-y-auto::-webkit-scrollbar) {
+  display: none;
+}
+
+:deep(.overflow-y-auto) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 针对整个标签页内容区域 */
+:deep([data-radix-tabs-content]) {
+  overflow-y: auto;
+}
+
+:deep([data-radix-tabs-content]::-webkit-scrollbar) {
+  display: none;
+}
+
+:deep([data-radix-tabs-content]) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>

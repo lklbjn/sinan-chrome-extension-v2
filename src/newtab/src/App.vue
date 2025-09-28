@@ -1319,14 +1319,39 @@ watch(filteredBookmarks, () => {
     <div class="relative z-10 min-h-screen bg-background/80 text-foreground p-8" :style="backdropStyle">
     <!-- 顶部区域 -->
     <div class="flex items-center justify-between mb-8">
-      <div class="bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border border-white/20 dark:border-white/10">
-        <h1 class="text-4xl font-bold mb-2 text-shadow-lg text-white dark:text-white drop-shadow-2xl">{{ welcomeConfig.title }}</h1>
-        <p class="text-white/80 dark:text-white/70 drop-shadow-lg">{{ welcomeConfig.subtitle }}</p>
+      <div :class="[
+        'backdrop-blur-md rounded-2xl px-6 py-4 shadow-lg border',
+        backgroundConfig.source === 'blank'
+          ? 'bg-white/90 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700'
+          : 'bg-white/10 dark:bg-black/20 border-white/20 dark:border-white/10'
+      ]">
+        <h1 :class="[
+          'text-4xl font-bold mb-2 text-shadow-lg drop-shadow-2xl',
+          backgroundConfig.source === 'blank'
+            ? 'text-gray-900 dark:text-white'
+            : 'text-white dark:text-white'
+        ]">{{ welcomeConfig.title }}</h1>
+        <p :class="[
+          'drop-shadow-lg',
+          backgroundConfig.source === 'blank'
+            ? 'text-gray-600 dark:text-gray-300'
+            : 'text-white/80 dark:text-white/70'
+        ]">{{ welcomeConfig.subtitle }}</p>
       </div>
-      <div class="flex items-center gap-2 bg-white/10 dark:bg-black/20 backdrop-blur-md rounded-2xl p-2 shadow-lg border border-white/20 dark:border-white/10">
+      <div :class="[
+        'flex items-center gap-2 backdrop-blur-md rounded-2xl p-2 shadow-lg border',
+        backgroundConfig.source === 'blank'
+          ? 'bg-white/90 dark:bg-gray-800/90 border-gray-200 dark:border-gray-700'
+          : 'bg-white/10 dark:bg-black/20 border-white/20 dark:border-white/10'
+      ]">
         <!-- Sinan 主页按钮 -->
         <Button variant="ghost" size="icon" @click="openSinanHomepage"
-                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
+                :class="[
+                  'h-10 w-10 transition-all duration-200',
+                  backgroundConfig.source === 'blank'
+                    ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10'
+                ]">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -1335,7 +1360,12 @@ watch(filteredBookmarks, () => {
         </Button>
         <!-- 新增书签按钮 -->
         <Button variant="ghost" size="icon" @click="openAddBookmarkDialog"
-                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
+                :class="[
+                  'h-10 w-10 transition-all duration-200',
+                  backgroundConfig.source === 'blank'
+                    ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10'
+                ]">
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 5v14M5 12h14" />
@@ -1343,7 +1373,12 @@ watch(filteredBookmarks, () => {
         </Button>
         <!-- 暗黑模式切换按钮 -->
         <Button variant="ghost" size="icon" @click="toggleDarkMode"
-                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200">
+                :class="[
+                  'h-10 w-10 transition-all duration-200',
+                  backgroundConfig.source === 'blank'
+                    ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10'
+                ]">
           <!-- 太阳图标（浅色模式） -->
           <svg v-if="isDarkMode" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1358,7 +1393,12 @@ watch(filteredBookmarks, () => {
         </Button>
         <!-- 刷新按钮 -->
         <Button variant="ghost" size="icon" @click="handleRefresh" :disabled="isRefreshing"
-                class="h-10 w-10 text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10 transition-all duration-200 disabled:opacity-50">
+                :class="[
+                  'h-10 w-10 transition-all duration-200 disabled:opacity-50',
+                  backgroundConfig.source === 'blank'
+                    ? 'text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'text-white dark:text-white hover:bg-white/20 dark:hover:bg-white/10'
+                ]">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
           :class="{ 'animate-spin': isRefreshing }">
